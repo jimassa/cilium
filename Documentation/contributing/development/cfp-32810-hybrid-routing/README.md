@@ -6,7 +6,8 @@ This directory contains the analysis, architecture documentation, and implementa
 
 - **CFP Document**: [CFP-32810 on GitHub](https://github.com/cilium/design-cfps/blob/main/cilium/CFP-32810-hybrid-routing-mode.md)
 - **Architecture Analysis**: [architecture.md](architecture.md)
-- **Implementation Design**: [CFP-32810-IMPLEMENTATION-DESIGN.md](CFP-32810-IMPLEMENTATION-DESIGN.md)
+- **Implementation Design**: [implementation-design.md](implementation-design.md)
+- **Architecture Diagrams**: [architecture-diagrams.md](architecture-diagrams.md)
 
 ## Branch
 
@@ -47,7 +48,7 @@ This combines the best of both worlds:
 - `flag_skip_tunnel` in `remote_endpoint_info` is used for auto-direct routing
 - Hive cell system provides clean lifecycle management
 
-### 2. [CFP-32810-IMPLEMENTATION-DESIGN.md](CFP-32810-IMPLEMENTATION-DESIGN.md)
+### 2. [implementation-design.md](implementation-design.md)
 
 **Complete implementation design** for hybrid routing mode, including:
 
