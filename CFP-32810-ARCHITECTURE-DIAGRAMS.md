@@ -160,51 +160,50 @@ sequenceDiagram
     participant User
     participant K8s as Kubernetes API
     participant Kubelet
-    participant FS as File System<br/>/etc/cilium/
+    participant FS as File System
     participant FSNotify as fsnotify Watcher
-    participant Agent as Subnet Topology<br/>Agent Goroutine
+    participant Agent as Subnet Topology Agent
     participant MapOps as Map Operations
-    participant BPFMap as eBPF Map<br/>cilium_subnet_topology_v4
-    participant Datapath as eBPF Programs<br/>bpf_lxc/bpf_host
+    participant BPFMap as eBPF Map
+    participant Datapath as eBPF Programs
 
-    User->>K8s: kubectl edit configmap<br/>cilium-subnet-topology
-    Note over User,K8s: Add new subnet:<br/>"10.0.0.0/24;192.168.0.0/16"
+    User->>K8s: kubectl edit configmap cilium-subnet-topology
+    Note over User,K8s: Add new subnet groups
 
     K8s->>K8s: Store in etcd
     K8s->>Kubelet: Watch notification
 
-    Kubelet->>FS: Create new directory<br/>..2025_01_23_10_30_45/
+    Kubelet->>FS: Create new timestamped directory
     Kubelet->>FS: Write new config file
-    Kubelet->>FS: Update symlinks atomically<br/>..data → new directory
+    Kubelet->>FS: Update symlinks atomically
 
-    FS->>FSNotify: File system event<br/>fsnotify.Create | fsnotify.Rename
+    FS->>FSNotify: File system event (Create/Rename)
 
     FSNotify->>Agent: Event received on channel
     Note over Agent: Watcher goroutine wakes up
 
-    Agent->>Agent: readConfig()<br/>Parse YAML
-    Note over Agent: Parse: "10.0.0.0/24;192.168.0.0/16"<br/>Group 1: [10.0.0.0/24]<br/>Group 2: [192.168.0.0/16]
-
-    Agent->>Agent: Assign Subnet IDs<br/>Group 1 → ID=1<br/>Group 2 → ID=2
+    Agent->>Agent: readConfig() and Parse YAML
+    Note over Agent: Parse config into subnet groups
+    Agent->>Agent: Assign Subnet IDs to groups
 
     Agent->>Agent: reconcileIPv4()
     Note over Agent: Compare desired vs current state
 
-    Agent->>MapOps: UpdateIPv4(192.168.0.0/16, 2)
-    MapOps->>BPFMap: bpf_map_update_elem()<br/>Key: 192.168.0.0/16<br/>Value: 2
+    Agent->>MapOps: UpdateIPv4(cidr, subnetID=2)
+    MapOps->>BPFMap: bpf_map_update_elem syscall
 
     BPFMap-->>MapOps: Success
     MapOps-->>Agent: Updated
 
-    Agent->>Agent: Log: "Adding IPv4 CIDR<br/>192.168.0.0/16, subnet_id=2"
+    Agent->>Agent: Log: Adding CIDR with subnet_id=2
 
     Note over Datapath: Next packet processed
     Datapath->>BPFMap: lookup_subnet_id(192.168.0.100)
     BPFMap-->>Datapath: Returns: 2
 
-    Note over Datapath: Packet from 192.168.0.100 → 192.168.0.200<br/>src_subnet_id=2, dst_subnet_id=2<br/>→ Use native routing!
+    Note over Datapath: Same subnet_id, use native routing!
 
-    Note over User,Datapath: Total time: ~5-10ms<br/>No agent restart needed!
+    Note over User,Datapath: Total time ~5-10ms, no agent restart needed!
 ```
 
 ---
@@ -641,9 +640,9 @@ classDiagram
 graph TB
     subgraph "Kubernetes Cluster"
         subgraph "Namespace: kube-system"
-            CM[ConfigMap<br/>cilium-subnet-topology<br/><br/>subnet-topology-ipv4:<br/>"10.0.0.0/24,10.10.0.0/24;<br/>192.168.0.0/16"]
+            CM[ConfigMap: cilium-subnet-topology]
 
-            DS[DaemonSet: cilium<br/><br/>Args:<br/>--routing-mode=hybrid<br/>--subnet-topology-configmap=<br/>/etc/cilium/subnet-topology-config.yaml]
+            DS[DaemonSet: cilium with hybrid routing]
         end
 
         subgraph "Node 1: 10.0.0.10"
@@ -658,7 +657,7 @@ graph TB
                 end
 
                 subgraph "eBPF Maps (Pinned)"
-                    ST1_V4[cilium_subnet_topology_v4<br/>10.0.0.0/24 → 1<br/>10.10.0.0/24 → 1<br/>192.168.0.0/16 → 2]
+                    ST1_V4[cilium_subnet_topology_v4]
                     ST1_V6[cilium_subnet_topology_v6]
                     IPC1[cilium_ipcache_v2]
                 end
@@ -670,8 +669,8 @@ graph TB
                 end
             end
 
-            POD1_1[Pod: app-1<br/>IP: 10.0.0.100]
-            POD1_2[Pod: app-2<br/>IP: 10.0.0.101]
+            POD1_1[Pod: app-1]
+            POD1_2[Pod: app-2]
         end
 
         subgraph "Node 2: 10.10.0.20"
@@ -686,7 +685,7 @@ graph TB
                 end
 
                 subgraph "eBPF Maps (Pinned)"
-                    ST2_V4[cilium_subnet_topology_v4<br/>10.0.0.0/24 → 1<br/>10.10.0.0/24 → 1<br/>192.168.0.0/16 → 2]
+                    ST2_V4[cilium_subnet_topology_v4]
                     ST2_V6[cilium_subnet_topology_v6]
                     IPC2[cilium_ipcache_v2]
                 end
@@ -698,8 +697,8 @@ graph TB
                 end
             end
 
-            POD2_1[Pod: app-3<br/>IP: 10.10.0.100]
-            POD2_2[Pod: app-4<br/>IP: 10.10.0.101]
+            POD2_1[Pod: app-3]
+            POD2_2[Pod: app-4]
         end
 
         subgraph "Node 3: 192.168.0.30"
@@ -714,7 +713,7 @@ graph TB
                 end
 
                 subgraph "eBPF Maps (Pinned)"
-                    ST3_V4[cilium_subnet_topology_v4<br/>10.0.0.0/24 → 1<br/>10.10.0.0/24 → 1<br/>192.168.0.0/16 → 2]
+                    ST3_V4[cilium_subnet_topology_v4]
                     ST3_V6[cilium_subnet_topology_v6]
                     IPC3[cilium_ipcache_v2]
                 end
@@ -726,8 +725,8 @@ graph TB
                 end
             end
 
-            POD3_1[Pod: db-1<br/>IP: 192.168.0.100]
-            POD3_2[Pod: db-2<br/>IP: 192.168.0.101]
+            POD3_1[Pod: db-1]
+            POD3_2[Pod: db-2]
         end
     end
 
@@ -786,15 +785,15 @@ sequenceDiagram
     BPF1->>Map1: lookup_subnet_id(10.10.0.100)
     Map1-->>BPF1: Returns: 1
 
-    Note over BPF1: src_subnet_id == dst_subnet_id<br/>1 == 1 ✓<br/>→ skip_tunnel = true
+    Note over BPF1: src_subnet_id == dst_subnet_id (1==1), skip_tunnel = true
 
-    BPF1->>Net: Forward packet natively<br/>(No encapsulation)
-    Note over BPF1,Net: Direct L3 routing<br/>Lower overhead<br/>Higher throughput
+    BPF1->>Net: Forward packet natively (no encapsulation)
+    Note over BPF1,Net: Direct L3 routing with lower overhead and higher throughput
 
     Net->>BPF2: Packet arrives at Node 2
     BPF2->>P2: Deliver to pod
 
-    Note over P1,P2: Same subnet group<br/>Native routing used ✓
+    Note over P1,P2: Same subnet group - native routing used
 ```
 
 ### Example 2: Different Subnet Groups (Encapsulation)
@@ -817,24 +816,24 @@ sequenceDiagram
     BPF1->>Map1: lookup_subnet_id(192.168.0.100)
     Map1-->>BPF1: Returns: 2
 
-    Note over BPF1: src_subnet_id != dst_subnet_id<br/>1 != 2 ✓<br/>→ skip_tunnel = false
+    Note over BPF1: src_subnet_id != dst_subnet_id (1!=2), skip_tunnel = false
 
     BPF1->>IPC: ipcache_lookup(192.168.0.100)
     IPC-->>BPF1: tunnel_endpoint: 192.168.0.30
 
     Note over BPF1: Need encapsulation
 
-    BPF1->>BPF1: Add VXLAN header<br/>Outer IP: 10.0.0.10 → 192.168.0.30<br/>Inner IP: 10.0.0.100 → 192.168.0.100
+    BPF1->>BPF1: Add VXLAN header (Outer 10.0.0.10→192.168.0.30, Inner 10.0.0.100→192.168.0.100)
 
     BPF1->>Tunnel: Send encapsulated packet
-    Note over Tunnel: Cross-subnet via tunnel<br/>Encapsulation overhead
+    Note over Tunnel: Cross-subnet via tunnel with encapsulation overhead
 
     Tunnel->>BPF3: Receive at Node 3
-    BPF3->>BPF3: Decapsulate<br/>Remove VXLAN header
+    BPF3->>BPF3: Decapsulate and remove VXLAN header
 
     BPF3->>P3: Deliver inner packet
 
-    Note over P1,P3: Different subnet groups<br/>VXLAN encapsulation used ✓
+    Note over P1,P3: Different subnet groups - VXLAN encapsulation used
 ```
 
 ---
