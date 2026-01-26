@@ -817,9 +817,6 @@ create_ct:
 
 		ret = ct_create6(get_ct_map6(tuple), NULL, tuple, ctx,
 				 CT_EGRESS, &ct_state_new, ext_err);
-		if (!IS_ERR(ret))
-			ret = snat_v6_create_dsr(tuple, addr, port, ext_err);
-
 		if (IS_ERR(ret))
 			return ret;
 		break;
@@ -1432,9 +1429,13 @@ static __always_inline int nodeport_svc_lb6(struct __ctx_buff *ctx,
 		return ret;
 	}
 
-	if (lb6_svc_is_l7_punt_proxy(svc) &&
-	    __lookup_ip6_endpoint(&backend->address)) {
-		ctx_skip_nodeport_set(ctx);
+	backend_local = __lookup_ip6_endpoint(&backend->address);
+
+	if (!backend_local && lb6_svc_is_hostport(svc))
+		return DROP_INVALID;
+
+	if (lb6_svc_is_l7_punt_proxy(svc) && backend_local) {
+		ctx_set_xfer(ctx, XFER_PKT_NO_SVC);
 		*punt_to_stack = true;
 		return CTX_ACT_OK;
 	}
@@ -1446,9 +1447,6 @@ static __always_inline int nodeport_svc_lb6(struct __ctx_buff *ctx,
 			return ret;
 	}
 
-	backend_local = __lookup_ip6_endpoint(&backend->address);
-	if (!backend_local && lb6_svc_is_hostport(svc))
-		return DROP_INVALID;
 	if (backend_local || !nodeport_uses_dsr6(svc)) {
 		struct ct_state ct_state = {};
 
@@ -2223,10 +2221,6 @@ create_ct:
 
 		ret = ct_create4(get_ct_map4(tuple), NULL, tuple, ctx,
 				 CT_EGRESS, &ct_state_new, ext_err);
-		if (!IS_ERR(ret))
-			/* TODO remove this in v1.20 */
-			ret = snat_v4_create_dsr(tuple, addr, port, ext_err);
-
 		if (IS_ERR(ret))
 			return ret;
 		break;
@@ -2832,9 +2826,13 @@ static __always_inline int nodeport_svc_lb4(struct __ctx_buff *ctx,
 			return ret;
 		}
 
-		if (lb4_svc_is_l7_punt_proxy(svc) &&
-		    __lookup_ip4_endpoint(backend->address)) {
-			ctx_skip_nodeport_set(ctx);
+		backend_local = __lookup_ip4_endpoint(backend->address);
+
+		if (!backend_local && lb4_svc_is_hostport(svc))
+			return DROP_INVALID;
+
+		if (lb4_svc_is_l7_punt_proxy(svc) && backend_local) {
+			ctx_set_xfer(ctx, XFER_PKT_NO_SVC);
 			*punt_to_stack = true;
 			return CTX_ACT_OK;
 		}
@@ -2851,9 +2849,6 @@ static __always_inline int nodeport_svc_lb4(struct __ctx_buff *ctx,
 	if (IS_ERR(ret))
 		return ret;
 
-	backend_local = __lookup_ip4_endpoint(backend->address);
-	if (!backend_local && lb4_svc_is_hostport(svc))
-		return DROP_INVALID;
 	/* Reply from DSR packet is never seen on this node again
 	 * hence no need to track in here.
 	 */

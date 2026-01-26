@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/stream"
 	"github.com/spf13/pflag"
 
+	"github.com/cilium/cilium/pkg/datapath/linux/bigtcp"
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/datapath/loader/metrics"
 	"github.com/cilium/cilium/pkg/datapath/tables"
@@ -114,6 +115,8 @@ type orchestratorParams struct {
 	MaglevConfig        maglev.Config
 	WgAgent             wgTypes.WireguardAgent
 	IPsecConfig         datapath.IPsecConfig
+	BIGTCPConfig        *bigtcp.Configuration
+	ConnectorConfig     datapath.ConnectorConfig
 }
 
 func newOrchestrator(params orchestratorParams) *orchestrator {
@@ -216,6 +219,7 @@ func (o *orchestrator) reconciler(ctx context.Context, health cell.Health) error
 			o.params.MTU,
 			o.params.WgAgent,
 			o.params.IPsecConfig,
+			o.params.ConnectorConfig,
 		)
 		if err != nil {
 			health.Degraded("failed to get local node configuration", err)
@@ -285,7 +289,11 @@ func (o *orchestrator) reinitialize(ctx context.Context, req reinitializeRequest
 		o.params.TunnelConfig,
 		o.params.IPTablesManager,
 		o.params.Proxy,
+		o.params.BIGTCPConfig,
 	)
+	if err == nil {
+		err = o.params.ConnectorConfig.Reinitialize()
+	}
 	if err != nil {
 		if req.errChan != nil {
 			select {

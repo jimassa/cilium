@@ -56,11 +56,11 @@ Listed below are the actively maintained release branches along with their lates
 patch release, corresponding image pull tags and their release notes:
 
 +---------------------------------------------------------+------------+------------------------------------+----------------------------------------------------------------------------+
-| `v1.18 <https://github.com/cilium/cilium/tree/v1.18>`__ | 2025-12-17 | ``quay.io/cilium/cilium:v1.18.5``  | `Release Notes <https://github.com/cilium/cilium/releases/tag/v1.18.5>`__  |
+| `v1.18 <https://github.com/cilium/cilium/tree/v1.18>`__ | 2026-01-13 | ``quay.io/cilium/cilium:v1.18.6``  | `Release Notes <https://github.com/cilium/cilium/releases/tag/v1.18.6>`__  |
 +---------------------------------------------------------+------------+------------------------------------+----------------------------------------------------------------------------+
-| `v1.17 <https://github.com/cilium/cilium/tree/v1.17>`__ | 2025-12-17 | ``quay.io/cilium/cilium:v1.17.11`` | `Release Notes <https://github.com/cilium/cilium/releases/tag/v1.17.11>`__ |
+| `v1.17 <https://github.com/cilium/cilium/tree/v1.17>`__ | 2026-01-13 | ``quay.io/cilium/cilium:v1.17.12`` | `Release Notes <https://github.com/cilium/cilium/releases/tag/v1.17.12>`__ |
 +---------------------------------------------------------+------------+------------------------------------+----------------------------------------------------------------------------+
-| `v1.16 <https://github.com/cilium/cilium/tree/v1.16>`__ | 2025-12-17 | ``quay.io/cilium/cilium:v1.16.18`` | `Release Notes <https://github.com/cilium/cilium/releases/tag/v1.16.18>`__ |
+| `v1.16 <https://github.com/cilium/cilium/tree/v1.16>`__ | 2026-01-13 | ``quay.io/cilium/cilium:v1.16.19`` | `Release Notes <https://github.com/cilium/cilium/releases/tag/v1.16.19>`__ |
 +---------------------------------------------------------+------------+------------------------------------+----------------------------------------------------------------------------+
 
 Architectures
@@ -95,7 +95,7 @@ corresponding image pull tags and their release notes where applicable:
 +----------------------------------------------------------------------------+------------+-----------------------------------------+---------------------------------------------------------------------------------+
 | `main <https://github.com/cilium/cilium/commits/main>`__                   | daily      | ``quay.io/cilium/cilium-ci:latest``     | N/A                                                                             |
 +----------------------------------------------------------------------------+------------+-----------------------------------------+---------------------------------------------------------------------------------+
-| `v1.19.0-pre.3 <https://github.com/cilium/cilium/commits/v1.19.0-pre.3>`__ | 2025-12-01 | ``quay.io/cilium/cilium:v1.19.0-pre.3`` | `Release Notes <https://github.com/cilium/cilium/releases/tag/v1.19.0-pre.3>`__ |
+| `v1.19.0-rc.0 <https://github.com/cilium/cilium/commits/v1.19.0-rc.0>`__   | 2026-01-15 | ``quay.io/cilium/cilium:v1.19.0-rc.0``  | `Release Notes <https://github.com/cilium/cilium/releases/tag/v1.19.0-rc.0>`__  |
 +----------------------------------------------------------------------------+------------+-----------------------------------------+---------------------------------------------------------------------------------+
 
 Functionality Overview
@@ -353,9 +353,9 @@ and the `2-Clause BSD License <bsd-license_>`__
     :alt: FOSSA Status
     :target: https://app.fossa.com/projects/custom%2B162%2Fgit%40github.com%3Acilium%2Fcilium.git?ref=badge_shield
 
-.. |gateway-api| image:: https://img.shields.io/badge/Gateway%20API%20Conformance%20v1.2.0-Cilium-green
+.. |gateway-api| image:: https://img.shields.io/badge/Gateway%20API%20Conformance%20v1.4.0-Cilium-green
     :alt: Gateway API Status
-    :target: https://github.com/kubernetes-sigs/gateway-api/tree/main/conformance/reports/v1.2.0/cilium-cilium
+    :target: https://github.com/kubernetes-sigs/gateway-api/tree/main/conformance/reports/v1.4.0/cilium
 
 .. |codespaces| image:: https://img.shields.io/badge/Open_in_GitHub_Codespaces-gray?logo=github
     :alt: Github Codespaces

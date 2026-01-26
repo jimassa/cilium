@@ -83,11 +83,10 @@ set_ipsec_encrypt(struct __ctx_buff *ctx,
 		  __u32 seclabel, bool use_meta)
 {
 	/* IPSec is performed by the stack on any packets with the
-	 * MARK_MAGIC_ENCRYPT bit set. During the process though we
-	 * lose the lxc context (seclabel and tunnel endpoint). The
-	 * tunnel endpoint can be looked up from daddr but the sec
-	 * label is stashed in the mark or cb, and extracted in
-	 * bpf_host to send ctx onto tunnel for encap.
+	 * MARK_MAGIC_ENCRYPT bit set.
+	 *
+	 * The source's security identity in CB_ENCRYPT_IDENTITY is
+	 * preserved across the XFRM traversal.
 	 */
 
 	const struct node_value *node_value = NULL;
@@ -102,7 +101,7 @@ set_ipsec_encrypt(struct __ctx_buff *ctx,
 
 	mark = ipsec_encode_encryption_mark(spi, node_value->id);
 
-	set_identity_meta(ctx, seclabel);
+	set_encrypt_identity_meta(ctx, seclabel);
 	if (use_meta)
 		ctx->cb[CB_ENCRYPT_MAGIC] = mark;
 	ctx->mark = mark;
@@ -111,7 +110,7 @@ set_ipsec_encrypt(struct __ctx_buff *ctx,
 }
 
 static __always_inline int
-do_decrypt(struct __ctx_buff *ctx, __u16 proto)
+do_decrypt(struct __ctx_buff *ctx, __be16 proto)
 {
 	struct ipv6hdr __maybe_unused *ip6;
 	struct iphdr __maybe_unused *ip4;
@@ -318,7 +317,7 @@ overlay_encrypt:
 }
 #else
 static __always_inline int
-do_decrypt(struct __ctx_buff __maybe_unused *ctx, __u16 __maybe_unused proto)
+do_decrypt(struct __ctx_buff __maybe_unused *ctx, __be16 __maybe_unused proto)
 {
 	return CTX_ACT_OK;
 }

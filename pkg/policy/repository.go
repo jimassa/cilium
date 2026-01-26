@@ -465,7 +465,7 @@ func (p *Repository) computePolicyEnforcementAndRules(securityIdentity *identity
 			logfields.Tier, tier,
 			logfields.Priority, priority,
 		)
-		rulesIngress = append(rulesIngress, wildcardRule(securityIdentity.LabelArray, true /*ingress*/, tier, priority))
+		rulesIngress = append(rulesIngress, wildcardRule(securityIdentity, LabelsAllowAnyIngress, true /*ingress*/, tier, priority))
 	}
 
 	// Same for egress -- synthesize a wildcard rule
@@ -473,27 +473,34 @@ func (p *Repository) computePolicyEnforcementAndRules(securityIdentity *identity
 		// User the lowest tier and priority
 		lastRule := rulesEgress[len(rulesEgress)-1]
 		tier, priority := lastRule.Tier, lastRule.Priority
+		// Keep the tier and priority as zeroes for backwards compatibility if the last rule
+		// is at tier and priority 0.
+		if tier > 0 || priority > 0 {
+			tier++
+			priority = 0
+		}
 		p.logger.Debug("Only default-allow policies, synthesizing egress wildcard-allow rule",
 			logfields.Identity, securityIdentity,
 			logfields.Tier, tier,
 			logfields.Priority, priority,
 		)
-		rulesEgress = append(rulesEgress, wildcardRule(securityIdentity.LabelArray, false /*egress*/, tier, priority))
+		rulesEgress = append(rulesEgress, wildcardRule(securityIdentity, LabelsAllowAnyEgress, false /*egress*/, tier, priority))
 	}
 
 	return
 }
 
-// wildcardRule generates a wildcard rule that only selects the given identity.
-func wildcardRule(lbls labels.LabelArray, ingress bool, tier types.Tier, priority float64) *rule {
+// wildcardRule generates a wildcard rule that only selects the given subject identity.
+func wildcardRule(subject *identity.Identity, lbls labels.LabelArray, ingress bool, tier types.Tier, priority float64) *rule {
 	return &rule{
 		PolicyEntry: types.PolicyEntry{
 			Tier:     tier,
 			Priority: priority,
 			Verdict:  types.Allow,
 			Ingress:  ingress,
-			Subject:  types.NewLabelSelectorFromLabels(lbls...),
+			Subject:  types.NewLabelSelectorFromLabels(subject.LabelArray...),
 			L3:       types.WildcardSelectors,
+			Labels:   lbls,
 		},
 	}
 }

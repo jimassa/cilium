@@ -29,10 +29,12 @@ jobs:
             hourModulo: 2
           - branch: 'v1.18'
             hourModulo: 3
+          - branch: 'v1.19'
+            hourModulo: 4
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout branch
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ matrix.branch }}
           persist-credentials: false
@@ -51,8 +53,11 @@ jobs:
 
           REF="${{ matrix.branch }}"
           SHA=$(git rev-parse ${REF})
+          # /test for 1.18 branch and lower
+          # /test\s* for 1.19 branch and higher
           readarray workflows < <((
             yq '.triggers["/test"].workflows[]' .github/ariane-config.yaml
+            yq '.triggers["/test\s*"].workflows[]' .github/ariane-config.yaml
             yq '.schedule.nightly.workflows[]' .github/ariane-config.yaml
           ) | sort -u)
 

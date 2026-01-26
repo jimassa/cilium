@@ -13,7 +13,6 @@ to learn how to level up through the project.
  * [André Martins] (Isovalent)
  * [Arthur Outhenin-Chalandre] (Ledger)
  * [Bill Mulligan] (Isovalent)
- * [Bruno M. Custódio] (Isovalent)
  * [Casey Callendrello] (Isovalent)
  * [Chance Zibolski] (Isovalent)
  * [Chris Tarazi] (Isovalent)
@@ -22,7 +21,6 @@ to learn how to level up through the project.
  * [Dorde Lapcevic] (Google)
  * [Dylan Reimerink] (Isovalent)
  * [Fabio Falzoi] (Isovalent)
- * [Gilberto Bertin] (Isovalent)
  * [Glib Smaga] (Isovalent)
  * [Hemanth Malla] (Microsoft)
  * [Jarno Rajahalme] (Isovalent)
@@ -36,10 +34,10 @@ to learn how to level up through the project.
  * [Louis DeLosSantos] (Isovalent)
  * [Maciej Kwiek] (Isovalent)
  * [Marcel Zięba] (Isovalent)
+ * [Marco Hofstetter] (Isovalent)
  * [Marco Iorio] (Isovalent)
  * [Martynas Pumputis] (Isovalent)
  * [Michi Mutsuzaki] (Isovalent)
- * [Natália Réka Ivánkó] (Isovalent)
  * [Nathan Sweet] (Isovalent)
  * [Nick Young] (Isovalent)
  * [Nicolas Busseneau] (Isovalent)
@@ -49,7 +47,6 @@ to learn how to level up through the project.
  * [Robin Hahling] (Isovalent)
  * [Sebastian Wicki] (Isovalent)
  * [Tam Mach] (Isovalent)
- * [Thomas Graf] (Isovalent)
  * [Timo Beckers] (Isovalent)
  * [Tobias Klauser] (Isovalent)
  * [Tom Hadlaw] (Isovalent)
@@ -61,13 +58,17 @@ to learn how to level up through the project.
 We would like to acknowledge previous committers and their huge contributions to our collective success:
 
  * [Beatriz Martínez] (Isovalent)
+ * [Bruno M. Custódio] (Isovalent)
  * [Dan Wendlandt] (Isovalent)
  * [Eloy Coto] (Red Hat)
+ * [Gilberto Bertin]
  * [Ian Vernon]
  * [Ilya Dmitrichenko] (Docker)
  * [Lorenz Bauer]
  * [Michal Rostecki] (Anza)
+ * [Natália Réka Ivánkó] (Isovalent)
  * [Ray Bejjani]
+ * [Thomas Graf] (Isovalent)
  * [Tom Payne]
  * [Weilong Cui] (Google)
  * [Yongkun Gui] (Google)
@@ -110,6 +111,7 @@ project.
 [Louis DeLosSantos]: https://github.com/ldelossa
 [Maciej Kwiek]: https://github.com/nebril
 [Marcel Zięba]: https://github.com/marseel
+[Marco Hofstetter]: https://github.com/mhofstetter
 [Marco Iorio]: https://github.com/giorio94
 [Martynas Pumputis]: https://github.com/brb
 [Michal Rostecki]: https://github.com/vadorovsky

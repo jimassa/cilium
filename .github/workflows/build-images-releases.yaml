@@ -50,7 +50,7 @@ jobs:
 
     steps:
       - name: Checkout main branch to access local actions
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
@@ -95,7 +95,7 @@ jobs:
           fi
 
       - name: Checkout Source Code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
@@ -240,6 +240,10 @@ jobs:
   call-publish-helm:
     if: github.repository_owner == 'cilium'
     name: Publish Helm Chart
+    permissions:
+      contents: read
+      # Required to generate OIDC tokens for `sigstore/cosign-installer` authentication
+      id-token: write
     uses: cilium/cilium/.github/workflows/release.yaml@main
     needs: image-digests
     with:
@@ -255,3 +259,5 @@ jobs:
     secrets:
       CILIUM_RELEASE_BOT_PEM: ${{ secrets.CILIUM_RELEASE_BOT_PEM }}
       CILIUM_RELEASE_BOT_APP_ID: ${{ secrets.CILIUM_RELEASE_BOT_APP_ID }}
+      QUAY_USERNAME_HELM_RELEASE_USERNAME: ${{ secrets.QUAY_USERNAME_HELM_RELEASE_USERNAME }}
+      QUAY_PASSWORD_HELM_RELEASE_PASSWORD: ${{ secrets.QUAY_PASSWORD_HELM_RELEASE_PASSWORD }}

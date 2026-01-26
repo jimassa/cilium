@@ -213,6 +213,12 @@ serviceAccounts:
     name: cilium-coredns-mcsapi-autoconfig
     automount: true
     annotations: {}
+  # -- Ztunnel is used if encryption.type=ztunnel
+  ztunnel:
+    create: true
+    name: ztunnel-cilium
+    automount: false
+    annotations: {}
 # -- Configure termination grace period for cilium-agent DaemonSet.
 terminationGracePeriodSeconds: 1
 # -- Install the cilium agent resources.
@@ -374,6 +380,8 @@ securityContext:
       - SETGID
       # Allow to execute program that changes UID (e.g. required for package installation)
       - SETUID
+      # Allow to read dmesg and get kernel pointers when kptr_restrict=1
+      - SYSLOG
     # -- Capabilities for the `mount-cgroup` init container
     mountCgroup:
       # Only used for 'mount' cgroup
@@ -720,7 +728,7 @@ bpf:
   # supported kernels.
   # @default -- `true`
   enableTCX: true
-  # -- (string) Mode for Pod devices for the core datapath (veth, netkit, netkit-l2)
+  # -- (string) Mode for Pod devices for the core datapath (auto, veth, netkit, netkit-l2)
   # @default -- `veth`
   datapathMode: veth
 # -- Enable BPF clock source probing for more efficient tick retrieval.
@@ -809,9 +817,15 @@ cni:
   # -- Specifies the resources for the cni initContainer
   resources:
     requests:
+      # @schema
+      # type: [integer, string]
+      # @schema
       cpu: 100m
       memory: 10Mi
     limits:
+      # @schema
+      # type: [integer, string]
+      # @schema
       cpu: 1
       memory: 1Gi
   # -- Enable route MTU for pod netns when CNI chaining is used
@@ -1097,13 +1111,26 @@ encryption:
   nodeEncryption: false
   # -- Configure the Encryption Pod2Pod strict mode.
   strictMode:
-    # -- Enable Encryption Pod2Pod strict mode.
+    # -- Enable Encryption Pod2Pod strict mode. (deprecated: please use encryption.strictMode.egress.enabled)
     enabled: false
-    # -- CIDR for the Encryption Pod2Pod strict mode.
+    # -- CIDR for the Encryption Pod2Pod strict mode. (deprecated: please use encryption.strictMode.egress.cidr)
     cidr: ""
-    # -- Allow dynamic lookup of remote node identities.
+    # -- Allow dynamic lookup of remote node identities. (deprecated: please use encryption.strictMode.egress.allowRemoteNodeIdentities)
     # This is required when tunneling is used or direct routing is used and the node CIDR and pod CIDR overlap.
     allowRemoteNodeIdentities: false
+    egress:
+      # -- Enable strict egress encryption.
+      enabled: false
+      # -- CIDR for the Encryption Pod2Pod strict egress mode.
+      cidr: ""
+      # -- Allow dynamic lookup of remote node identities.
+      # This is required when tunneling is used or direct routing is used and the node CIDR and pod CIDR overlap.
+      allowRemoteNodeIdentities: false
+    ingress:
+      # -- Enable strict ingress encryption.
+      # When enabled, all unencrypted overlay ingress traffic will be dropped.
+      # This option is only applicable when WireGuard and tunneling are enabled.
+      enabled: false
   ipsec:
     # -- Name of the key file inside the Kubernetes secret configured via secretName.
     keyFile: keys
@@ -1124,6 +1151,84 @@ encryption:
   wireguard:
     # -- Controls WireGuard PersistentKeepalive option. Set 0s to disable.
     persistentKeepalive: 0s
+  # -- ztunnel encryption configuration.
+  # ztunnel is Istio's purpose-built, per-node proxy for handling L4 traffic in ambient mesh mode.
+  # These settings only apply when encryption.type is set to "ztunnel".
+  ztunnel:
+    # -- ztunnel container image.
+    image:
+      # @schema
+      # type: [null, string]
+      # @schema
+      override: ~
+      repository: "docker.io/istio/ztunnel"
+      tag: "1.28.0-distroless"
+      pullPolicy: "IfNotPresent"
+      # @schema
+      # type: [null, string]
+      # @schema
+      digest: ~
+      useDigest: false
+    # -- CA server address for certificate requests.
+    caAddress: "https://localhost:15012"
+    # -- TCP port for the health API.
+    healthPort: 15021
+    # -- ztunnel resource limits & requests.
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+    # -- ztunnel update strategy.
+    updateStrategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+    # -- Configure termination grace period for ztunnel DaemonSet.
+    terminationGracePeriodSeconds: 30
+    # -- Readiness probe configuration.
+    readinessProbe:
+      initialDelaySeconds: 0
+      periodSeconds: 10
+      failureThreshold: 3
+    # -- Node selector for ztunnel pods.
+    nodeSelector:
+      kubernetes.io/os: linux
+    # -- Node tolerations for ztunnel scheduling.
+    tolerations:
+      - effect: NoSchedule
+        operator: Exists
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoExecute
+        operator: Exists
+    # -- Affinity for ztunnel pods.
+    affinity: {}
+    # @schema
+    # type: [null, string]
+    # @schema
+    # -- The priority class to use for ztunnel pods.
+    priorityClassName: ~
+    # -- Annotations to be added to all ztunnel resources.
+    annotations: {}
+    # -- Annotations to be added to ztunnel pods.
+    podAnnotations: {}
+    # -- Labels to be added to ztunnel pods.
+    podLabels: {}
+    # -- Additional ztunnel container environment variables.
+    extraEnv: []
+    # -- Additional ztunnel volumes.
+    extraVolumes: []
+    # -- Additional ztunnel volumeMounts.
+    extraVolumeMounts: []
+    # -- ztunnel secrets configuration.
+    secrets:
+      # -- Base64-encoded bootstrap root certificate content.
+      # If not provided, the secret must be created manually before deploying.
+      # @schema
+      # type: [null, string]
+      # @schema
+      bootstrapRootCert: ~
 endpointHealthChecking:
   # -- Enable connectivity health checking between virtual endpoints.
   enabled: true
@@ -1808,6 +1913,20 @@ hubble:
       mutexProfileFraction: 0
       # -- Enable goroutine blocking profiling for hubble-relay and set the rate of sampled events in nanoseconds (set to 1 to sample all events [warning: performance overhead])
       blockProfileRate: 0
+    # -- Logging configuration for hubble-relay.
+    logOptions:
+      # @schema
+      # type: [null, string]
+      # @schema
+      # -- Log format for hubble-relay. Valid values are: text, text-ts, json, json-ts.
+      # @default -- text-ts
+      format: ~
+      # @schema
+      # type: [null, string]
+      # @schema
+      # -- Log level for hubble-relay. Valid values are: debug, info, warn, error.
+      # @default -- info
+      level: ~
   ui:
     # -- Whether to enable the Hubble UI.
     enabled: false
@@ -1867,12 +1986,6 @@ hubble:
       extraVolumes: []
       # -- Additional hubble-ui backend volumeMounts.
       extraVolumeMounts: []
-      livenessProbe:
-        # -- Enable liveness probe for Hubble-ui backend (requires Hubble-ui 0.12+)
-        enabled: false
-      readinessProbe:
-        # -- Enable readiness probe for Hubble-ui backend (requires Hubble-ui 0.12+)
-        enabled: false
       # -- Resource requests and limits for the 'backend' container of the 'hubble-ui' deployment.
       resources: {}
       #   limits:
@@ -2170,11 +2283,11 @@ ipam:
     ipamMaxAllocate: ~
     # -- IPAM static IP tags (currently only works with AWS and Azure)
     ipamStaticIPTags: []
-# -- defaultLBServiceIPAM indicates the default LoadBalancer Service IPAM when
-# no LoadBalancer class is set. Applicable values: lbipam, nodeipam, none
 # @schema
 # type: [string]
 # @schema
+# -- defaultLBServiceIPAM indicates the default LoadBalancer Service IPAM when
+# no LoadBalancer class is set. Applicable values: lbipam, nodeipam, none
 defaultLBServiceIPAM: lbipam
 nodeIPAM:
   # -- Configure Node IPAM
@@ -2301,6 +2414,8 @@ enableMasqueradeRouteSource: false
 enableIPv4BIGTCP: false
 # -- Enables IPv6 BIG TCP support which increases maximum IPv6 GSO/GRO limits for nodes and pods
 enableIPv6BIGTCP: false
+# -- Enable BIG TCP in tunneling mode and increase maximum GRO/GSO limits for VXLAN/GENEVE tunnels
+enableTunnelBIGTCP: false
 
 nat:
   # -- Number of the top-k SNAT map connections to track in Cilium statedb.
@@ -2945,6 +3060,9 @@ tls:
 # @default -- `"vxlan"`
 tunnelProtocol: ""
 # -- IP family for the underlay.
+# Possible values:
+#   - "ipv4"
+#   - "ipv6"
 # @default -- `"ipv4"`
 underlayProtocol: ""
 # -- Enable native-routing mode or tunneling mode.
@@ -3085,6 +3203,8 @@ operator:
   annotations: {}
   # -- HostNetwork setting
   hostNetwork: true
+  # -- HostUsers setting (must be true if hostNetwork is true)
+  hostUsers: true
   # -- Security context to be added to cilium-operator pods
   podSecurityContext:
     seccompProfile:
@@ -3288,6 +3408,9 @@ nodeinit:
   # ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
   resources:
     requests:
+      # @schema
+      # type: [integer, string]
+      # @schema
       cpu: 100m
       memory: 100Mi
   # -- Security context to be added to nodeinit pods.
@@ -4098,7 +4221,7 @@ authentication:
   # -- Enable authentication processing and garbage collection.
   # Note that if disabled, policy enforcement will still block requests that require authentication.
   # But the resulting authentication requests for these requests will not be processed, therefore the requests not be allowed.
-  enabled: true
+  enabled: false
   # -- Buffer size of the channel Cilium uses to receive authentication events from the signal map.
   queueSize: 1024
   # -- Buffer size of the channel Cilium uses to receive certificate expiration events from auth handlers.

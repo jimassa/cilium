@@ -91,9 +91,10 @@ cilium-agent [flags]
       --container-ip-local-reserved-ports string                  Instructs the Cilium CNI plugin to reserve the provided comma-separated list of ports in the container network namespace. Prevents the container from using these ports as ephemeral source ports (see Linux ip_local_reserved_ports). Use this flag if you observe port conflicts between transparent DNS proxy requests and host network namespace services. Value "auto" reserves the WireGuard and VXLAN ports used by Cilium (default "auto")
       --controller-group-metrics strings                          List of controller group names for which to to enable metrics. Accepts 'all' and 'none'. The set of controller group names available is not guaranteed to be stable between Cilium versions.
       --crd-wait-timeout duration                                 Cilium will exit if CRDs are not available within this duration upon startup (default 5m0s)
-      --datapath-mode string                                      Datapath mode name (veth, netkit, netkit-l2) (default "veth")
+      --datapath-mode string                                      Datapath mode name (auto, veth, netkit, netkit-l2) (default "veth")
   -D, --debug                                                     Enable debugging mode
       --debug-verbose strings                                     List of enabled verbose debug groups
+      --default-lb-service-ipam string                            Indicates the default LoadBalancer Service IPAM when no LoadBalancer class is set.Applicable values: lbipam, nodeipam, none (default "lbipam")
       --devices strings                                           List of devices facing cluster/external network (used for BPF NodePort, BPF masquerading and host firewall); supports '+' as wildcard in device name, e.g. 'eth+'; support '!' to exclude devices, e.g. '!eth+' excludes any device with prefix 'eth'. Note '!' says nothing about which ones to include. A device must match other criteria to be selected; The filters are matched in order and whatever matched first wins.
       --direct-routing-device string                              Device name used to connect nodes in direct routing mode (used by BPF NodePort, BPF host routing; if empty, automatically set to a device with k8s InternalIP/ExternalIP or with a default route)
       --direct-routing-skip-unreachable                           Enable skipping L2 routes between nodes on different subnets
@@ -129,7 +130,8 @@ cilium-agent [flags]
       --enable-dynamic-config                                     Enables support for dynamic agent config (default true)
       --enable-dynamic-lifecycle-manager                          Enables support for dynamic lifecycle management
       --enable-egress-gateway                                     Enable egress gateway
-      --enable-encryption-strict-mode                             Enable encryption strict mode
+      --enable-encryption-strict-mode-egress                      Enable strict mode encryption enforcement for egress traffic
+      --enable-encryption-strict-mode-ingress                     Enable strict mode encryption enforcement for ingress traffic
       --enable-endpoint-health-checking                           Enable connectivity health checking between virtual endpoints (default true)
       --enable-endpoint-lockdown-on-policy-overflow               When an endpoint's policy map overflows, shutdown all (ingress and egress) network traffic for that endpoint.
       --enable-endpoint-routes                                    Use per endpoint routes instead of routing via cilium_host
@@ -165,12 +167,14 @@ cilium-agent [flags]
       --enable-l2-neigh-discovery                                 Enables L2 neighbor discovery used by kube-proxy-replacement and IPsec
       --enable-l2-pod-announcements                               Enable announcing Pod IPs with Gratuitous ARP and NDP
       --enable-l7-proxy                                           Enable L7 proxy for L7 policy enforcement (default true)
+      --enable-lb-ipam                                            Enable LB IPAM (default true)
       --enable-local-node-route                                   Enable installation of the route which points the allocation prefix of the local node (default true)
       --enable-local-redirect-policy                              Enable Local Redirect Policy
       --enable-masquerade-to-route-source                         Masquerade packets to the source IP provided from the routing layer rather than interface address
       --enable-monitor                                            Enable the monitor unix domain socket server (default true)
       --enable-nat46x64-gateway                                   Enable NAT46 and NAT64 gateway
       --enable-no-service-endpoints-routable                      Enable routes when service has 0 endpoints (default true)
+      --enable-node-ipam                                          Enable Node IPAM
       --enable-node-selector-labels                               Enable use of node label based identity
       --enable-packetization-layer-pmtud                          Enables kernel packetization layer path mtu discovery on Pod netns (default true)
       --enable-pmtu-discovery                                     Enable path MTU discovery to send ICMP fragmentation-needed replies to the client
@@ -183,6 +187,7 @@ cilium-agent [flags]
       --enable-standalone-dns-proxy                               Enables standalone DNS proxy
       --enable-tcx                                                Attach endpoint programs using tcx if supported by the kernel (default true)
       --enable-tracing                                            Enable tracing while determining policy (debugging)
+      --enable-tunnel-big-tcp                                     Enable BIG TCP in tunneling mode and increase maximum GRO/GSO limits for VXLAN/GENEVE tunnels
       --enable-unreachable-routes                                 Add unreachable routes on pod deletion
       --enable-vtep                                               Enable  VXLAN Tunnel Endpoint (VTEP) Integration (beta)
       --enable-well-known-identities                              Enable well-known identities for known Kubernetes components (default true)
@@ -192,8 +197,8 @@ cilium-agent [flags]
       --enable-ztunnel                                            Use zTunnel as Cilium's encryption infrastructure
       --encrypt-interface string                                  Transparent encryption interface
       --encrypt-node                                              Enables encrypting traffic from non-Cilium pods and host networking (only supported with WireGuard, beta)
-      --encryption-strict-mode-allow-remote-node-identities       Allows unencrypted traffic from pods to remote node identities within the strict mode CIDR. This is required when tunneling is used or direct routing is used and the node CIDR and pod CIDR overlap.
-      --encryption-strict-mode-cidr string                        In strict-mode encryption, all unencrypted traffic coming from this CIDR and going to this same CIDR will be dropped
+      --encryption-strict-egress-allow-remote-node-identities     Allows unencrypted traffic from pods to remote node identities within the strict mode CIDR. This is required when tunneling is used or direct routing is used and the node CIDR and pod CIDR overlap.
+      --encryption-strict-egress-cidr string                      In strict-mode-egress encryption, all unencrypted traffic coming from this CIDR and going to this same CIDR will be dropped.
       --endpoint-bpf-prog-watchdog-interval duration              Interval to trigger endpoint BPF programs load check watchdog (default 30s)
       --endpoint-queue-size int                                   Size of EventQueue per-endpoint (default 25)
       --endpoint-regen-interval duration                          Periodically recalculate and re-apply endpoint configuration. Set to 0 to disable (default 2m0s)
@@ -347,7 +352,7 @@ cilium-agent [flags]
       --log-system-load                                           Enable periodic logging of system load
       --lrp-address-matcher-cidrs strings                         Limit address matches to specific CIDRs
       --max-connected-clusters uint32                             Maximum number of clusters to be connected in a clustermesh. Increasing this value will reduce the maximum number of identities available. Valid configurations are [255, 511]. (default 255)
-      --mesh-auth-enabled                                         Enable authentication processing & garbage collection (beta) (default true)
+      --mesh-auth-enabled                                         Enable authentication processing & garbage collection (beta)
       --mesh-auth-gc-interval duration                            Interval in which auth entries are attempted to be garbage collected (default 5m0s)
       --mesh-auth-mutual-connect-timeout duration                 Timeout for connecting to the remote node TCP socket (default 5s)
       --mesh-auth-mutual-listener-port int                        Port on which the Cilium Agent will perform mutual authentication handshakes between other Agents
@@ -371,7 +376,7 @@ cilium-agent [flags]
       --node-port-range strings                                   Set the min/max NodePort port range (default [30000,32767])
       --nodeport-addresses strings                                A whitelist of CIDRs to limit which IPs are used for NodePort. If not set, primary IPv4 and/or IPv6 address of each native device is used.
       --only-masquerade-default-pool                              When using multi-pool IPAM, only masquerade flows from the default IP pool. This will preserve source IPs for pods from non-default IP pools. Useful when combining multi-pool IPAM with BGP control plane. This option must be combined with enable-bpf-masquerade.
-      --policy-accounting                                         Enable policy accounting (default true)
+      --policy-accounting                                         Maintain packet and byte counters for every policy entry (default true)
       --policy-audit-mode                                         Enable policy audit (non-drop) mode
       --policy-cidr-match-mode strings                            The entities that can be selected by CIDR policy. Supported values: 'nodes'
       --policy-default-local-cluster                              Control whether policy rules assume by default the local cluster if not explicitly selected (default true)

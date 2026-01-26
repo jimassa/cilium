@@ -11,6 +11,7 @@ cilium-operator [flags]
 ### Options
 
 ```
+      --alibaba-cloud-release-excess-ips                     Enable releasing excess free IP addresses from Alibaba Cloud ENI.
       --alibaba-cloud-vpc-id string                          Specific VPC ID for AlibabaCloud ENI. If not set use same VPC as operator
       --auto-create-cilium-pod-ip-pools map                  Automatically create CiliumPodIPPool resources on startup. Specify pools in the form of <pool>=ipv4-cidrs:<cidr>,[<cidr>...];ipv4-mask-size:<size> (multiple pools can also be passed by repeating the CLI flag)
       --aws-enable-prefix-delegation                         Allows operator to allocate prefixes to ENIs instead of individual IP addresses
@@ -72,8 +73,8 @@ cilium-operator [flags]
       --enable-ztunnel                                       Use zTunnel as Cilium's encryption infrastructure
       --enforce-ingress-https                                Enforces https for host having matching TLS host in Ingress. Incoming traffic to http listener will return 308 http error code with respective location in header. (default true)
       --eni-gc-interval duration                             Interval for garbage collection of unattached ENIs. Set to 0 to disable (default 5m0s)
-      --eni-gc-tags map                                      Additional tags attached to ENIs created by Cilium. Dangling ENIs with this tag will be garbage collected
-      --eni-tags map                                         ENI tags in the form of k1=v1 (multiple k/v pairs can be passed by repeating the CLI flag)
+      --eni-gc-tags stringToString                           Additional tags attached to ENIs created by Cilium. Dangling ENIs with this tag will be garbage collected (default [])
+      --eni-tags stringToString                              ENI tags in the form of k1=v1 (multiple k/v pairs can be passed by repeating the CLI flag) (default [])
       --excess-ip-release-delay int                          Number of seconds operator would wait before it releases an IP previously marked as excess (default 180)
       --gateway-api-hostnetwork-enabled                      Exposes Gateway listeners on the host network.
       --gateway-api-hostnetwork-nodelabelselector string     Label selector that matches the nodes where the gateway listeners should be exposed. It's a list of comma-separated key-value label pairs. e.g. 'kubernetes.io/os=linux,kubernetes.io/hostname=kind-worker'
@@ -123,6 +124,7 @@ cilium-operator [flags]
       --log-driver strings                                   Logging endpoints to use for example syslog
       --log-opt map                                          Log driver options for cilium-operator, configmap example for syslog driver: {"syslog.level":"info","syslog.facility":"local4"}
       --max-connected-clusters uint32                        Maximum number of clusters to be connected in a clustermesh. Increasing this value will reduce the maximum number of identities available. Valid configurations are [255, 511]. (default 255)
+      --mesh-auth-enabled                                    Enable authentication processing & garbage collection (beta)
       --mesh-auth-mutual-enabled                             The flag to enable mutual authentication for the SPIRE server (beta).
       --mesh-auth-spiffe-trust-domain string                 The trust domain for the SPIFFE identity. (default "spiffe.cilium")
       --mesh-auth-spire-agent-socket string                  The path for the SPIRE admin agent Unix socket. (default "/run/spire/sockets/agent/agent.sock")

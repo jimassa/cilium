@@ -1524,7 +1524,7 @@ func (ct *ConnectivityTest) deploy(ctx context.Context) error {
 
 		_, err = ct.clients.dst.GetService(ctx, ct.params.TestNamespace, loadbalancerL7DeploymentName, metav1.GetOptions{})
 		if err != nil {
-			ct.Logf("✨ [%s] Deploying %s service...", ct.clients.dst.ClusterName(), echoOtherNodeDeploymentName)
+			ct.Logf("✨ [%s] Deploying %s service...", ct.clients.dst.ClusterName(), loadbalancerL7DeploymentName)
 			svc := newService(
 				loadbalancerL7DeploymentName,
 				map[string]string{"name": loadbalancerL7DeploymentName},
@@ -2729,6 +2729,13 @@ func (ct *ConnectivityTest) validateDeployment(ctx context.Context) error {
 			for _, addr := range node.Status.Addresses {
 				// Only check IP addresses (skip DNS names, hostnames)
 				if addr.Type != slimcorev1.NodeInternalIP && addr.Type != slimcorev1.NodeExternalIP {
+					continue
+				}
+
+				// Skip IP addresses of families which are not enabled in Cilium
+				addrFamily := features.GetIPFamily(addr.Address)
+				if (addrFamily == features.IPFamilyV4 && !ct.Features[features.IPv4].Enabled) ||
+					(addrFamily == features.IPFamilyV6 && !ct.Features[features.IPv6].Enabled) {
 					continue
 				}
 

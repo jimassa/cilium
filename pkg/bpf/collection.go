@@ -16,7 +16,6 @@ import (
 
 	"github.com/cilium/cilium/pkg/bpf/analyze"
 	"github.com/cilium/cilium/pkg/container/set"
-	"github.com/cilium/cilium/pkg/datapath/config"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 )
 
@@ -150,6 +149,10 @@ type CollectionOptions struct {
 
 	// Set of objects to keep during reachability pruning.
 	Keep *set.Set[string]
+
+	// ConfigDumpPath is the path to write a file to containing the constants used
+	// during loading, typically to be included in sysdumps.
+	ConfigDumpPath string
 }
 
 func (co *CollectionOptions) populateMapReplacements() {
@@ -193,7 +196,7 @@ func LoadCollection(logger *slog.Logger, spec *ebpf.CollectionSpec, opts *Collec
 
 	logger.Debug("Loading Collection into kernel",
 		logfields.MapRenames, opts.MapRenames,
-		logfields.Constants, fmt.Sprintf("%#v", opts.Constants),
+		logfields.Constants, printConstants(opts.Constants),
 	)
 
 	// Copy spec so the modifications below don't affect the input parameter,
@@ -224,6 +227,10 @@ func LoadCollection(logger *slog.Logger, spec *ebpf.CollectionSpec, opts *Collec
 	fixed := fixedResources(spec, opts.Keep)
 	if err := removeUnusedMaps(spec, fixed, reach, logger); err != nil {
 		return nil, nil, fmt.Errorf("pruning unused maps: %w", err)
+	}
+
+	if err := dumpConstants(spec, opts); err != nil {
+		return nil, nil, fmt.Errorf("writing constants: %w", err)
 	}
 
 	// Find and strip all CILIUM_PIN_REPLACE pinning flags before creating the
@@ -280,38 +287,6 @@ func renameMaps(coll *ebpf.CollectionSpec, renames map[string]string) error {
 		}
 
 		mapSpec.Name = rename
-	}
-
-	return nil
-}
-
-// applyConstants sets the values of BPF C runtime configurables defined using
-// the DECLARE_CONFIG macro.
-func applyConstants(spec *ebpf.CollectionSpec, obj any) error {
-	if obj == nil {
-		return nil
-	}
-
-	constants, err := config.Map(obj)
-	if err != nil {
-		return fmt.Errorf("converting struct to map: %w", err)
-	}
-
-	for name, value := range constants {
-		constName := config.ConstantPrefix + name
-
-		v, ok := spec.Variables[constName]
-		if !ok {
-			return fmt.Errorf("can't set non-existent Variable %s", name)
-		}
-
-		if v.SectionName != config.Section {
-			return fmt.Errorf("can only set Cilium config variables in section %s (got %s:%s), ", config.Section, v.SectionName, name)
-		}
-
-		if err := v.Set(value); err != nil {
-			return fmt.Errorf("setting Variable %s: %w", name, err)
-		}
 	}
 
 	return nil

@@ -2,6 +2,7 @@ allowed-teams:
   - organization-members
 
 triggers:
+  # This trigger needs to be kept in sync with ariane-scheduled.yaml workflow
   /test\s*:
     workflows:
     - conformance-aws-cni.yaml
@@ -38,9 +39,6 @@ triggers:
   /ci-delegated-ipam:
     workflows:
     - conformance-delegated-ipam.yaml
-  /ci-ipsec-upgrade:
-    workflows:
-    - tests-ipsec-upgrade.yaml
   /ci-ipsec:
     workflows:
     - conformance-ipsec.yaml
@@ -114,12 +112,16 @@ triggers:
     workflows:
     - l7-perf.yaml
 
+# This trigger needs to be kept in sync with ariane-scheduled.yaml workflow
 schedule:
   nightly:
     workflows:
     - conformance-aks.yaml
     - conformance-gateway-api.yaml
     - conformance-gke.yaml
+    - conformance-ipsec.yaml
+    - tests-ces-migrate.yaml
+    - tests-e2e-upgrade.yaml
 
 workflows:
   conformance-aks.yaml:
@@ -165,8 +167,6 @@ workflows:
   tests-datapath-verifier.yaml:
     paths-regex: (bpf|test/verifier|vendor|images|.github/actions/cl2-modules|pkg/datapath/loader)/
   tests-e2e-upgrade.yaml:
-    paths-ignore-regex: ((bpf/complexity-tests|bpf/tests|test|Documentation|hubble|.github/actions/cl2-modules)/|(.github/renovate\.json5|README.rst|CODEOWNERS|stable.txt|.*\.md|.*_test\.go)$)
-  tests-ipsec-upgrade.yaml:
     paths-ignore-regex: ((bpf/complexity-tests|bpf/tests|test|Documentation|hubble|.github/actions/cl2-modules)/|(.github/renovate\.json5|README.rst|CODEOWNERS|stable.txt|.*\.md|.*_test\.go)$)
   hubble-cli-integration-test.yaml:
     paths-ignore-regex: ((bpf/complexity-tests|bpf/tests|test|Documentation|.github/actions/cl2-modules)/|(.github/renovate\.json5|README.rst|CODEOWNERS|stable.txt|.*\.md)$)

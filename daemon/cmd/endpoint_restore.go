@@ -21,7 +21,6 @@ import (
 
 	"github.com/cilium/cilium/daemon/cmd/legacy"
 	"github.com/cilium/cilium/pkg/datapath/linux/safenetlink"
-	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/endpoint"
 	endpointapi "github.com/cilium/cilium/pkg/endpoint/api"
@@ -39,6 +38,7 @@ import (
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maps/lxcmap"
+	"github.com/cilium/cilium/pkg/metrics"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	policyDirectory "github.com/cilium/cilium/pkg/policy/directory"
@@ -54,6 +54,7 @@ var endpointRestoreCell = cell.Module(
 	cell.Provide(promise.New[endpointstate.Restorer]),
 	cell.Provide(newEndpointRestorer),
 	cell.Invoke(registerEndpointRestoreFinishJob),
+	metrics.Metric(newEndpointRestoreMetrics),
 )
 
 // registerEndpointRestoreFinishJob registers a hive job that asynchronously performs the last step of the endpoint restoration
@@ -79,6 +80,7 @@ type endpointRestorerParams struct {
 	Lifecycle           cell.Lifecycle
 	DaemonConfig        *option.DaemonConfig
 	Logger              *slog.Logger
+	Metrics             *endpointRestoreMetrics
 	K8sWatcher          *watchers.K8sWatcher
 	Clientset           k8sClient.Clientset
 	EndpointCreator     endpointcreator.EndpointCreator
@@ -92,6 +94,7 @@ type endpointRestorerParams struct {
 	DirReadStatus       policyDirectory.DirectoryWatcherReadStatus
 	IPCache             *ipcache.IPCache
 	LXCMap              lxcmap.Map
+	ConnectorConfig     datapath.ConnectorConfig
 }
 
 type endpointRestorer struct {
@@ -107,12 +110,14 @@ type endpointRestorer struct {
 	ipSecAgent          datapath.IPsecAgent
 	ipamManager         *ipam.IPAM
 	lxcMap              lxcmap.Map
+	connectorConfig     datapath.ConnectorConfig
 
 	cacheStatus   k8sSynced.CacheStatus
 	dirReadStatus policyDirectory.DirectoryWatcherReadStatus
 	ipCache       *ipcache.IPCache
 
 	restoreState                  *endpointRestoreState
+	metrics                       *endpointRestoreMetrics
 	endpointRestoreComplete       chan struct{}
 	endpointRegenerateComplete    chan struct{}
 	endpointInitialPolicyComplete chan struct{}
@@ -132,11 +137,13 @@ func newEndpointRestorer(params endpointRestorerParams) *endpointRestorer {
 		ipSecAgent:          params.IPSecAgent,
 		ipamManager:         params.IPAMManager,
 		lxcMap:              params.LXCMap,
+		connectorConfig:     params.ConnectorConfig,
 
 		cacheStatus:   params.CacheStatus,
 		dirReadStatus: params.DirReadStatus,
 		ipCache:       params.IPCache,
 
+		metrics:                       params.Metrics,
 		endpointRestoreComplete:       make(chan struct{}),
 		endpointRegenerateComplete:    make(chan struct{}),
 		endpointInitialPolicyComplete: make(chan struct{}),
@@ -235,12 +242,7 @@ func (r *endpointRestorer) checkLink(linkName string) error {
 // the compatibility issue
 func (r *endpointRestorer) validateDatapathModeCompatibility(endpoints map[uint16]*endpoint.Endpoint) error {
 	var incompatibleEndpoints []string
-	var incompatibleType string
-
-	// Determine what type of endpoints are incompatible with current mode
-	currentDatapathMode := option.Config.DatapathMode
-	isNetkitMode := currentDatapathMode == datapathOption.DatapathModeNetkit || currentDatapathMode == datapathOption.DatapathModeNetkitL2
-	isVethMode := currentDatapathMode == datapathOption.DatapathModeVeth
+	var incompatibleTypes []string
 
 	for _, ep := range endpoints {
 		// Only check pod endpoints, skip host endpoint, health endpoint, and other special endpoints
@@ -254,7 +256,7 @@ func (r *endpointRestorer) validateDatapathModeCompatibility(endpoints map[uint1
 		}
 
 		ifName := ep.HostInterface()
-		link, err := safenetlink.LinkByName(ifName)
+		linkMode, linkCompat, err := r.connectorConfig.GetLinkCompatibility(ifName)
 		if err != nil {
 			r.logger.Debug("Failed to check endpoint link type, skipping",
 				logfields.EndpointID, ep.ID,
@@ -262,29 +264,27 @@ func (r *endpointRestorer) validateDatapathModeCompatibility(endpoints map[uint1
 			)
 			continue
 		}
-
-		// Check for incompatibility
-		isIncompatible := false
-		if isNetkitMode && link.Type() == "veth" {
-			isIncompatible = true
-			incompatibleType = "veth"
-		} else if isVethMode && link.Type() == "netkit" {
-			isIncompatible = true
-			incompatibleType = "netkit"
-		}
-
-		if isIncompatible {
+		if !linkCompat {
 			epName := fmt.Sprintf("%s/%s (endpoint-%d)", ep.K8sNamespace, ep.K8sPodName, ep.ID)
 			incompatibleEndpoints = append(incompatibleEndpoints, epName)
+
+			linkModeName := linkMode.String()
+			if !slices.Contains(incompatibleTypes, linkModeName) {
+				incompatibleTypes = append(incompatibleTypes, linkModeName)
+			}
 		}
 	}
 
 	if len(incompatibleEndpoints) > 0 {
+		currentDatapathMode := r.connectorConfig.GetOperationalMode().String()
 		return fmt.Errorf(
-			"Cannot start cilium-agent with datapath-mode=%s: detected %d existing endpoint(s) using %s datapath mode. "+
-				"Endpoints using %s datapath mode: %v. "+
-				"Please delete these pods or change the datapath mode back to %s before starting the agent with %s mode",
-			currentDatapathMode, len(incompatibleEndpoints), incompatibleType, incompatibleType, incompatibleEndpoints, incompatibleType, currentDatapathMode)
+			"Cannot start cilium-agent with datapath-mode=%s: detected %d existing endpoint(s) using incompatible datapath-modes. "+
+				"Affected endpoints: %s. "+
+				"Detected incompatible datapath-modes: %s. "+
+				"Please delete these pods or correct the cilium-agent operational datapath-mode.",
+			currentDatapathMode, len(incompatibleEndpoints),
+			strings.Join(incompatibleEndpoints, ", "),
+			strings.Join(incompatibleTypes, ", "))
 	}
 
 	return nil
@@ -386,6 +386,17 @@ func (r *endpointRestorer) readOldEndpointsFromDisk(ctx context.Context) error {
 		return nil
 	}
 
+	var failed int
+
+	startTime := time.Now()
+	defer func() {
+		d := time.Since(startTime)
+		r.metrics.Duration.WithLabelValues(phaseRead).Set(d.Seconds())
+		r.metrics.Endpoints.WithLabelValues(phaseRead, outcomeTotal).Set(float64(len(r.restoreState.possible) + failed))
+		r.metrics.Endpoints.WithLabelValues(phaseRead, outcomeSuccessful).Set(float64(len(r.restoreState.possible)))
+		r.metrics.Endpoints.WithLabelValues(phaseRead, outcomeFailed).Set(float64(failed))
+	}()
+
 	r.logger.Info("Reading old endpoints...")
 
 	dirFiles, err := os.ReadDir(r.stateDir)
@@ -394,11 +405,12 @@ func (r *endpointRestorer) readOldEndpointsFromDisk(ctx context.Context) error {
 	}
 	eptsID := endpoint.FilterEPDir(dirFiles)
 
-	r.restoreState.possible = endpoint.ReadEPsFromDirNames(ctx, r.logger, r.endpointCreator, r.stateDir, eptsID)
+	r.restoreState.possible, failed = endpoint.ReadEPsFromDirNames(ctx, r.logger, r.endpointCreator, r.stateDir, eptsID)
 
 	if len(r.restoreState.possible) == 0 {
 		r.logger.Info("No old endpoints found.")
 	}
+
 	return nil
 }
 
@@ -409,6 +421,7 @@ func (r *endpointRestorer) readOldEndpointsFromDisk(ctx context.Context) error {
 // Endpoints which cannot be associated with a container workload are deleted.
 func (r *endpointRestorer) RestoreOldEndpoints() error {
 	failed := 0
+	skipped := 0
 	defer func() {
 		r.restoreState.possible = nil
 	}()
@@ -417,6 +430,16 @@ func (r *endpointRestorer) RestoreOldEndpoints() error {
 		r.logger.Info("Endpoint restore is disabled, skipping restore step")
 		return nil
 	}
+
+	startTime := time.Now()
+	defer func() {
+		d := time.Since(startTime)
+		r.metrics.Duration.WithLabelValues(phaseRestoration).Set(d.Seconds())
+		r.metrics.Endpoints.WithLabelValues(phaseRestoration, outcomeTotal).Set(float64(len(r.restoreState.possible)))
+		r.metrics.Endpoints.WithLabelValues(phaseRestoration, outcomeSuccessful).Set(float64(len(r.restoreState.restored)))
+		r.metrics.Endpoints.WithLabelValues(phaseRestoration, outcomeSkipped).Set(float64(skipped))
+		r.metrics.Endpoints.WithLabelValues(phaseRestoration, outcomeFailed).Set(float64(failed))
+	}()
 
 	r.logger.Info("Restoring endpoints...")
 
@@ -450,9 +473,14 @@ func (r *endpointRestorer) RestoreOldEndpoints() error {
 				r.endpointManager.DeleteK8sCiliumEndpointSync(ep)
 				scopedLog.Warn("Unable to restore endpoint, ignoring", logfields.Error, err)
 				failed++
+			} else {
+				skipped++
 			}
 		}
 		if !restore {
+			if err == nil {
+				skipped++
+			}
 			r.restoreState.toClean = append(r.restoreState.toClean, ep)
 			continue
 		}
@@ -509,6 +537,7 @@ func (r *endpointRestorer) regenerateRestoredEndpoints(state *endpointRestoreSta
 	// account for the new identity during the grace period. For this
 	// purpose, all endpoints being restored must already be in the
 	// endpoint list.
+	startTimeRestore := time.Now()
 	for i := len(state.restored) - 1; i >= 0; i-- {
 		ep := state.restored[i]
 
@@ -524,34 +553,13 @@ func (r *endpointRestorer) regenerateRestoredEndpoints(state *endpointRestoreSta
 		}
 	}
 
-	endpointsToRegenerate := make([]*endpoint.Endpoint, 0, len(state.restored))
-	for _, ep := range state.restored {
-		if ep.IsHost() && r.ipSecAgent.Enabled() {
-			// To support v1.18 VinE upgrades, we need to restore the host
-			// endpoint before any other endpoint, to ensure a drop-less upgrade.
-			// This is because in v1.18 'bpf_lxc' programs stop issuing IPsec hooks
-			// which trigger encryption.
-			//
-			// Instead, 'bpf_host' is responsible for performing IPsec hooks.
-			// Therefore, we want 'bpf_host' to regenerate BEFORE 'bpf_lxc' so the
-			// IPsec hooks are always present while 'bpf_lxc' programs regen,
-			// ensuring no IPsec leaks occur.
-			//
-			// This can be removed in v1.19.
-			r.logger.Info("Successfully restored Host endpoint. Scheduling regeneration", logfields.EndpointID, ep.ID)
-			if err := ep.RegenerateAfterRestore(r.endpointRegenerator, r.endpointMetadata.FetchK8sMetadataForEndpoint); err != nil {
-				r.logger.Debug(
-					"Error regenerating Host endpoint during restore",
-					logfields.Error, err,
-					logfields.EndpointID, ep.ID,
-				)
-			}
-			continue
-		}
+	r.logger.Debug(
+		"Successfully restored endpoints into endpoint manager",
+		logfields.Endpoints, len(state.restored),
+		logfields.Duration, time.Since(startTimeRestore),
+	)
 
-		endpointsToRegenerate = append(endpointsToRegenerate, ep)
-	}
-
+	startTimeCleanup := time.Now()
 	var endpointCleanupCompleted sync.WaitGroup
 	for _, ep := range state.toClean {
 		endpointCleanupCompleted.Add(1)
@@ -570,10 +578,24 @@ func (r *endpointRestorer) regenerateRestoredEndpoints(state *endpointRestoreSta
 	}
 	endpointCleanupCompleted.Wait()
 
-	// Trigger regeneration for relevant restored endopints in a separate goroutine.
-	go r.handleRestoredEndpointsRegeneration(endpointsToRegenerate)
+	r.logger.Debug(
+		"Successfully cleaned up endpoints that weren't possible to restore",
+		logfields.Endpoints, len(state.toClean),
+		logfields.Duration, time.Since(startTimeCleanup),
+	)
+
+	// Trigger regeneration for relevant restored endpoints in a separate goroutine.
+	go r.handleRestoredEndpointsRegeneration(state.restored)
 
 	go func() {
+		startTime := time.Now()
+		defer func() {
+			d := time.Since(startTime)
+			r.metrics.Duration.WithLabelValues(phasePolicyComputation).Set(d.Seconds())
+			r.metrics.Endpoints.WithLabelValues(phasePolicyComputation, outcomeTotal).Set(float64(len(state.restored)))
+			r.metrics.Endpoints.WithLabelValues(phasePolicyComputation, outcomeSuccessful).Set(float64(len(state.restored)))
+		}()
+
 		for _, ep := range state.restored {
 			ep.WaitForInitialPolicy()
 		}
@@ -589,7 +611,17 @@ func (r *endpointRestorer) regenerateRestoredEndpoints(state *endpointRestoreSta
 //
 // Once complete, this method closes the daemon 'endpointRestoreComplete' channel.
 func (r *endpointRestorer) handleRestoredEndpointsRegeneration(endpoints []*endpoint.Endpoint) {
+	total, regenerated, failed := 0, 0, 0
+
 	startTime := time.Now()
+	defer func() {
+		d := time.Since(startTime)
+		r.metrics.Duration.WithLabelValues(phaseRegeneration).Set(d.Seconds())
+		r.metrics.Endpoints.WithLabelValues(phaseRegeneration, outcomeTotal).Set(float64(total))
+		r.metrics.Endpoints.WithLabelValues(phaseRegeneration, outcomeSuccessful).Set(float64(regenerated))
+		r.metrics.Endpoints.WithLabelValues(phaseRegeneration, outcomeFailed).Set(float64(failed))
+	}()
+
 	// Wait for Endpoint DeletionQueue to be processed first so we can avoid
 	// expensive regeneration for already deleted endpoints.
 	_ = r.endpointAPIFence.Wait(context.Background())
@@ -635,7 +667,6 @@ func (r *endpointRestorer) handleRestoredEndpointsRegeneration(endpoints []*endp
 	regenWg.Wait()
 	close(epRegenerated)
 
-	total, regenerated, failed := 0, 0, 0
 	for buildSuccess := range epRegenerated {
 		total++
 		if buildSuccess {
@@ -707,6 +738,14 @@ func (r *endpointRestorer) InitRestore(ctx context.Context, health cell.Health) 
 		r.logger.Info("State restore is disabled. Existing endpoints on node are ignored")
 		return nil
 	}
+
+	startTime := time.Now()
+	defer func() {
+		d := time.Since(startTime)
+		r.metrics.Duration.WithLabelValues(phasePrepareRegeneration).Set(d.Seconds())
+		r.metrics.Endpoints.WithLabelValues(phasePrepareRegeneration, outcomeTotal).Set(float64(len(r.restoreState.restored)))
+		r.metrics.Endpoints.WithLabelValues(phasePrepareRegeneration, outcomeSuccessful).Set(float64(len(r.restoreState.restored)))
+	}()
 
 	health.OK("Waiting for K8s initialization")
 	// Wait only for certain caches, but not all!

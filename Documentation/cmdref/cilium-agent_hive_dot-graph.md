@@ -58,6 +58,7 @@ cilium-agent hive dot-graph [flags]
       --conntrack-gc-max-interval duration                        Set the maximum interval for the connection-tracking garbage collection
       --controller-group-metrics strings                          List of controller group names for which to to enable metrics. Accepts 'all' and 'none'. The set of controller group names available is not guaranteed to be stable between Cilium versions.
       --crd-wait-timeout duration                                 Cilium will exit if CRDs are not available within this duration upon startup (default 5m0s)
+      --default-lb-service-ipam string                            Indicates the default LoadBalancer Service IPAM when no LoadBalancer class is set.Applicable values: lbipam, nodeipam, none (default "lbipam")
       --devices strings                                           List of devices facing cluster/external network (used for BPF NodePort, BPF masquerading and host firewall); supports '+' as wildcard in device name, e.g. 'eth+'; support '!' to exclude devices, e.g. '!eth+' excludes any device with prefix 'eth'. Note '!' says nothing about which ones to include. A device must match other criteria to be selected; The filters are matched in order and whatever matched first wins.
       --direct-routing-device string                              Device name used to connect nodes in direct routing mode (used by BPF NodePort, BPF host routing; if empty, automatically set to a device with k8s InternalIP/ExternalIP or with a default route)
       --disable-envoy-version-check                               Do not perform Envoy version check
@@ -95,13 +96,16 @@ cilium-agent hive dot-graph [flags]
       --enable-k8s-api-discovery                                  Enable discovery of Kubernetes API groups and resources with the discovery API
       --enable-l2-neigh-discovery                                 Enables L2 neighbor discovery used by kube-proxy-replacement and IPsec
       --enable-l2-pod-announcements                               Enable announcing Pod IPs with Gratuitous ARP and NDP
+      --enable-lb-ipam                                            Enable LB IPAM (default true)
       --enable-monitor                                            Enable the monitor unix domain socket server (default true)
       --enable-no-service-endpoints-routable                      Enable routes when service has 0 endpoints (default true)
+      --enable-node-ipam                                          Enable Node IPAM
       --enable-packetization-layer-pmtud                          Enables kernel packetization layer path mtu discovery on Pod netns (default true)
       --enable-policy-secrets-sync                                Enables Envoy secret sync for Secrets used in CiliumNetworkPolicy and CiliumClusterwideNetworkPolicy
       --enable-route-mtu-for-cni-chaining                         Enable route MTU for pod netns when CNI chaining is used
       --enable-service-topology                                   Enable support for service topology aware hints
       --enable-standalone-dns-proxy                               Enables standalone DNS proxy
+      --enable-tunnel-big-tcp                                     Enable BIG TCP in tunneling mode and increase maximum GRO/GSO limits for VXLAN/GENEVE tunnels
       --enable-well-known-identities                              Enable well-known identities for known Kubernetes components (default true)
       --enable-wireguard                                          Enable WireGuard
       --enable-xt-socket-fallback                                 Enable fallback for missing xt_socket module (default true)
@@ -211,7 +215,7 @@ cilium-agent hive dot-graph [flags]
       --lb-state-file string                                      Synchronize load-balancing state from the specified file
       --lrp-address-matcher-cidrs strings                         Limit address matches to specific CIDRs
       --max-connected-clusters uint32                             Maximum number of clusters to be connected in a clustermesh. Increasing this value will reduce the maximum number of identities available. Valid configurations are [255, 511]. (default 255)
-      --mesh-auth-enabled                                         Enable authentication processing & garbage collection (beta) (default true)
+      --mesh-auth-enabled                                         Enable authentication processing & garbage collection (beta)
       --mesh-auth-gc-interval duration                            Interval in which auth entries are attempted to be garbage collected (default 5m0s)
       --mesh-auth-mutual-connect-timeout duration                 Timeout for connecting to the remote node TCP socket (default 5s)
       --mesh-auth-mutual-listener-port int                        Port on which the Cilium Agent will perform mutual authentication handshakes between other Agents

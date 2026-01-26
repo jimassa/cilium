@@ -22,7 +22,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
 	"github.com/cilium/cilium/pkg/datapath/linux/safenetlink"
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
-	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
+	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
 	endpointcreator "github.com/cilium/cilium/pkg/endpoint/creator"
 	"github.com/cilium/cilium/pkg/endpointmanager"
@@ -35,7 +35,6 @@ import (
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/mtu"
 	"github.com/cilium/cilium/pkg/netns"
-	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/pidfile"
 	"github.com/cilium/cilium/pkg/time"
@@ -60,11 +59,16 @@ const (
 	LaunchTime = 30 * time.Second
 )
 
-func (h *ciliumHealthManager) getHealthRoutes(addressing *models.NodeAddressing, mtuConfig mtu.MTU) ([]route.Route, error) {
+func (h *ciliumHealthManager) getHealthRoutes(ctx context.Context, mtuConfig mtu.MTU) ([]route.Route, error) {
+	na, err := h.getNodeRouterAddressing(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get node router addressing: %w", err)
+	}
+
 	routes := []route.Route{}
 
 	if option.Config.EnableIPv4 {
-		v4Routes, err := connector.IPv4Routes(addressing, mtuConfig.GetRouteMTU())
+		v4Routes, err := connector.IPv4Routes(na, mtuConfig.GetRouteMTU())
 		if err == nil {
 			routes = append(routes, v4Routes...)
 		} else {
@@ -73,7 +77,7 @@ func (h *ciliumHealthManager) getHealthRoutes(addressing *models.NodeAddressing,
 	}
 
 	if option.Config.EnableIPv6 {
-		v6Routes, err := connector.IPv6Routes(addressing, mtuConfig.GetRouteMTU())
+		v6Routes, err := connector.IPv6Routes(na, mtuConfig.GetRouteMTU())
 		if err != nil {
 			return nil, fmt.Errorf("Failed to get IPv6 routes")
 		}
@@ -81,6 +85,33 @@ func (h *ciliumHealthManager) getHealthRoutes(addressing *models.NodeAddressing,
 	}
 
 	return routes, nil
+}
+
+func (h *ciliumHealthManager) getNodeRouterAddressing(ctx context.Context) (*models.NodeAddressing, error) {
+	ln, err := h.localNodeStore.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get local node: %w", err)
+	}
+
+	nodeRouterAddressing := &models.NodeAddressing{}
+
+	if h.daemonConfig.EnableIPv6 {
+		nodeRouterAddressing.IPV6 = &models.NodeAddressingElement{
+			Enabled:    h.daemonConfig.EnableIPv6,
+			IP:         ln.GetCiliumInternalIP(true).String(),
+			AllocRange: ln.IPv6AllocCIDR.String(),
+		}
+	}
+
+	if h.daemonConfig.EnableIPv4 {
+		nodeRouterAddressing.IPV4 = &models.NodeAddressingElement{
+			Enabled:    h.daemonConfig.EnableIPv4,
+			IP:         ln.GetCiliumInternalIP(false).String(),
+			AllocRange: ln.IPv4AllocCIDR.String(),
+		}
+	}
+
+	return nodeRouterAddressing, nil
 }
 
 // configureHealthRouting is meant to be run inside the health service netns
@@ -190,21 +221,18 @@ func (h *ciliumHealthManager) cleanupEndpoint() {
 	//
 	// Explicit removal is performed to ensure that everything referencing the network namespace
 	// the endpoint process is executed under is disposed, so that the network namespace itself is properly disposed.
-	switch option.Config.DatapathMode {
-	case datapathOption.DatapathModeVeth, datapathOption.DatapathModeNetkit, datapathOption.DatapathModeNetkitL2:
-		for _, iface := range []string{legacyHealthName, healthName} {
-			scopedLog := h.logger.With(logfields.Interface, iface)
-			if link, err := safenetlink.LinkByName(iface); err == nil {
-				err = netlink.LinkDel(link)
-				if err != nil {
-					scopedLog.Info("Couldn't delete cilium-health device",
-						logfields.DatapathMode, option.Config.DatapathMode,
-						logfields.Error, err,
-					)
-				}
-			} else {
-				scopedLog.Debug("Didn't find existing device", logfields.Error, err)
+	for _, iface := range []string{legacyHealthName, healthName} {
+		scopedLog := h.logger.With(logfields.Interface, iface)
+		if link, err := safenetlink.LinkByName(iface); err == nil {
+			err = netlink.LinkDel(link)
+			if err != nil {
+				scopedLog.Info("Couldn't delete cilium-health device",
+					logfields.DatapathMode, option.Config.DatapathMode,
+					logfields.Error, err,
+				)
 			}
+		} else {
+			scopedLog.Debug("Didn't find existing device", logfields.Error, err)
 		}
 	}
 }
@@ -259,7 +287,10 @@ func (h *ciliumHealthManager) launchAsEndpoint(baseCtx context.Context, endpoint
 		return nil, fmt.Errorf("create cilium-health netns: %w", err)
 	}
 
-	linkConfig := connector.LinkConfig{
+	linkConfig := datapath.LinkConfig{
+		HostIfName:     healthName,
+		PeerIfName:     epIfaceName,
+		PeerNamespace:  ns,
 		GROIPv6MaxSize: bigTCPConfig.GetGROIPv6MaxSize(),
 		GSOIPv6MaxSize: bigTCPConfig.GetGSOIPv6MaxSize(),
 		GROIPv4MaxSize: bigTCPConfig.GetGROIPv4MaxSize(),
@@ -267,31 +298,18 @@ func (h *ciliumHealthManager) launchAsEndpoint(baseCtx context.Context, endpoint
 		DeviceMTU:      mtuConfig.GetDeviceMTU(),
 	}
 
-	var hostLink, epLink netlink.Link
-	switch option.Config.DatapathMode {
-	case datapathOption.DatapathModeVeth:
-		hostLink, epLink, err = connector.SetupVethWithNames(h.logger, healthName, epIfaceName, linkConfig, sysctl)
-		if err != nil {
-			return nil, fmt.Errorf("Error while creating veth: %w", err)
-		}
-		if err = netlink.LinkSetNsFd(epLink, int(ns.FD())); err != nil {
-			return nil, fmt.Errorf("failed to move device %q to health namespace: %w", epIfaceName, err)
-		}
-	case datapathOption.DatapathModeNetkit, datapathOption.DatapathModeNetkitL2:
-		l2Mode := option.Config.DatapathMode == datapathOption.DatapathModeNetkitL2
-		hostLink, epLink, err = connector.SetupNetkitWithNames(h.logger, healthName, epIfaceName, linkConfig, l2Mode, sysctl)
-		if err != nil {
-			return nil, fmt.Errorf("Error while creating netkit: %w", err)
-		}
-		if err = netlink.LinkSetNsFd(epLink, int(ns.FD())); err != nil {
-			return nil, fmt.Errorf("failed to move device %q to health namespace: %w", epIfaceName, err)
-		}
+	linkPair, err := h.connectorConfig.NewLinkPair(linkConfig, sysctl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create health linkpair: %w", err)
 	}
 
-	info.Mac = epLink.Attrs().HardwareAddr.String()
-	info.HostMac = hostLink.Attrs().HardwareAddr.String()
-	info.InterfaceIndex = int64(hostLink.Attrs().Index)
-	info.InterfaceName = hostLink.Attrs().Name
+	hostLinkAttrs := linkPair.GetHostLink().Attrs()
+	peerLinkAttrs := linkPair.GetPeerLink().Attrs()
+
+	info.Mac = peerLinkAttrs.HardwareAddr.String()
+	info.HostMac = hostLinkAttrs.HardwareAddr.String()
+	info.InterfaceIndex = int64(hostLinkAttrs.Index)
+	info.InterfaceName = hostLinkAttrs.Name
 
 	if err := ns.Do(func() error {
 		return h.configureHealthInterface(epIfaceName, ip4Address, ip6Address)
@@ -346,7 +364,7 @@ func (h *ciliumHealthManager) launchAsEndpoint(baseCtx context.Context, endpoint
 	}
 
 	// Set up the endpoint routes.
-	routes, err := h.getHealthRoutes(node.GetNodeAddressing(h.logger), mtuConfig)
+	routes, err := h.getHealthRoutes(baseCtx, mtuConfig)
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting routes for containername %q: %w", info.ContainerName, err)
 	}

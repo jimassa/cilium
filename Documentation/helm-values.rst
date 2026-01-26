@@ -67,7 +67,7 @@
    * - :spelling:ignore:`authentication.enabled`
      - Enable authentication processing and garbage collection. Note that if disabled, policy enforcement will still block requests that require authentication. But the resulting authentication requests for these requests will not be processed, therefore the requests not be allowed.
      - bool
-     - ``true``
+     - ``false``
    * - :spelling:ignore:`authentication.gcInterval`
      - Interval for garbage collection of auth map entries.
      - string
@@ -111,7 +111,7 @@
    * - :spelling:ignore:`authentication.mutual.spire.install.agent.image`
      - SPIRE agent image
      - object
-     - ``{"digest":"sha256:5106ac601272a88684db14daf7f54b9a45f31f77bb16a906bd5e87756ee7b97c","override":null,"pullPolicy":"Always","repository":"ghcr.io/spiffe/spire-agent","tag":"1.9.6","useDigest":true}``
+     - ``{"digest":"sha256:7bb8469af28f00908a96a8a51fb36cbbcdfb85efe78e94b492f949f33284bf4d","override":null,"pullPolicy":"Always","repository":"ghcr.io/spiffe/spire-agent","tag":"1.14.1","useDigest":true}``
    * - :spelling:ignore:`authentication.mutual.spire.install.agent.labels`
      - SPIRE agent labels
      - object
@@ -159,7 +159,7 @@
    * - :spelling:ignore:`authentication.mutual.spire.install.initImage`
      - init container image of SPIRE agent and server
      - object
-     - ``{"digest":"sha256:d80cd694d3e9467884fcb94b8ca1e20437d8a501096cdf367a5a1918a34fc2fd","override":null,"pullPolicy":"Always","repository":"docker.io/library/busybox","tag":"1.37.0","useDigest":true}``
+     - ``{"digest":"sha256:e226d6308690dbe282443c8c7e57365c96b5228f0fe7f40731b5d84d37a06839","override":null,"pullPolicy":"Always","repository":"docker.io/library/busybox","tag":"1.37.0","useDigest":true}``
    * - :spelling:ignore:`authentication.mutual.spire.install.namespace`
      - SPIRE namespace to install into
      - string
@@ -199,7 +199,7 @@
    * - :spelling:ignore:`authentication.mutual.spire.install.server.image`
      - SPIRE server image
      - object
-     - ``{"digest":"sha256:59a0b92b39773515e25e68a46c40d3b931b9c1860bc445a79ceb45a805cab8b4","override":null,"pullPolicy":"Always","repository":"ghcr.io/spiffe/spire-server","tag":"1.9.6","useDigest":true}``
+     - ``{"digest":"sha256:46a740705d5e15839552b1307aff44ef5ac42d9b444d073b4ccefd87c5269283","override":null,"pullPolicy":"Always","repository":"ghcr.io/spiffe/spire-server","tag":"1.14.1","useDigest":true}``
    * - :spelling:ignore:`authentication.mutual.spire.install.server.initContainers`
      - SPIRE server init containers
      - list
@@ -361,7 +361,7 @@
      - int
      - ``524288``
    * - :spelling:ignore:`bpf.datapathMode`
-     - Mode for Pod devices for the core datapath (veth, netkit, netkit-l2)
+     - Mode for Pod devices for the core datapath (auto, veth, netkit, netkit-l2)
      - string
      - ``veth``
    * - :spelling:ignore:`bpf.disableExternalIPMitigation`
@@ -503,7 +503,7 @@
    * - :spelling:ignore:`certgen`
      - Configure certificate generation for Hubble integration. If hubble.tls.auto.method=cronJob, these values are used for the Kubernetes CronJob which will be scheduled regularly to (re)generate any certificates not provided manually.
      - object
-     - ``{"affinity":{},"annotations":{"cronJob":{},"job":{}},"cronJob":{"failedJobsHistoryLimit":1,"successfulJobsHistoryLimit":3},"extraVolumeMounts":[],"extraVolumes":[],"generateCA":true,"image":{"digest":"sha256:2825dbfa6f89cbed882fd1d81e46a56c087e35885825139923aa29eb8aec47a9","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/certgen","tag":"v0.3.1","useDigest":true},"nodeSelector":{},"podLabels":{},"priorityClassName":"","resources":{},"tolerations":[],"ttlSecondsAfterFinished":null}``
+     - ``{"affinity":{},"annotations":{"cronJob":{},"job":{}},"cronJob":{"failedJobsHistoryLimit":1,"successfulJobsHistoryLimit":3},"extraVolumeMounts":[],"extraVolumes":[],"generateCA":true,"image":{"digest":"sha256:19921f48ee7e2295ea4dca955878a6cd8d70e6d4219d08f688e866ece9d95d4d","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/certgen","tag":"v0.3.2","useDigest":true},"nodeSelector":{},"podLabels":{},"priorityClassName":"","resources":{},"tolerations":[],"ttlSecondsAfterFinished":null}``
    * - :spelling:ignore:`certgen.affinity`
      - Affinity for certgen
      - object
@@ -1213,7 +1213,7 @@
      - string
      - ``nil``
    * - :spelling:ignore:`defaultLBServiceIPAM`
-     - defaultLBServiceIPAM indicates the default LoadBalancer Service IPAM when no LoadBalancer class is set. Applicable values: lbipam, nodeipam, none @schema type: [string] @schema
+     - defaultLBServiceIPAM indicates the default LoadBalancer Service IPAM when no LoadBalancer class is set. Applicable values: lbipam, nodeipam, none
      - string
      - ``"lbipam"``
    * - :spelling:ignore:`directRoutingSkipUnreachable`
@@ -1320,6 +1320,10 @@
      - Enable Non-Default-Deny policies
      - bool
      - ``true``
+   * - :spelling:ignore:`enableTunnelBIGTCP`
+     - Enable BIG TCP in tunneling mode and increase maximum GRO/GSO limits for VXLAN/GENEVE tunnels
+     - bool
+     - ``false``
    * - :spelling:ignore:`enableXTSocketFallback`
      - Enables the fallback compatibility solution for when the xt_socket kernel module is missing and it is needed for the datapath L7 redirection to work properly. See documentation for details on when this can be disabled: https://docs.cilium.io/en/stable/operations/system_requirements/#linux-kernel.
      - bool
@@ -1363,17 +1367,33 @@
    * - :spelling:ignore:`encryption.strictMode`
      - Configure the Encryption Pod2Pod strict mode.
      - object
-     - ``{"allowRemoteNodeIdentities":false,"cidr":"","enabled":false}``
+     - ``{"allowRemoteNodeIdentities":false,"cidr":"","egress":{"allowRemoteNodeIdentities":false,"cidr":"","enabled":false},"enabled":false,"ingress":{"enabled":false}}``
    * - :spelling:ignore:`encryption.strictMode.allowRemoteNodeIdentities`
-     - Allow dynamic lookup of remote node identities. This is required when tunneling is used or direct routing is used and the node CIDR and pod CIDR overlap.
+     - Allow dynamic lookup of remote node identities. (deprecated: please use encryption.strictMode.egress.allowRemoteNodeIdentities) This is required when tunneling is used or direct routing is used and the node CIDR and pod CIDR overlap.
      - bool
      - ``false``
    * - :spelling:ignore:`encryption.strictMode.cidr`
-     - CIDR for the Encryption Pod2Pod strict mode.
+     - CIDR for the Encryption Pod2Pod strict mode. (deprecated: please use encryption.strictMode.egress.cidr)
      - string
      - ``""``
+   * - :spelling:ignore:`encryption.strictMode.egress.allowRemoteNodeIdentities`
+     - Allow dynamic lookup of remote node identities. This is required when tunneling is used or direct routing is used and the node CIDR and pod CIDR overlap.
+     - bool
+     - ``false``
+   * - :spelling:ignore:`encryption.strictMode.egress.cidr`
+     - CIDR for the Encryption Pod2Pod strict egress mode.
+     - string
+     - ``""``
+   * - :spelling:ignore:`encryption.strictMode.egress.enabled`
+     - Enable strict egress encryption.
+     - bool
+     - ``false``
    * - :spelling:ignore:`encryption.strictMode.enabled`
-     - Enable Encryption Pod2Pod strict mode.
+     - Enable Encryption Pod2Pod strict mode. (deprecated: please use encryption.strictMode.egress.enabled)
+     - bool
+     - ``false``
+   * - :spelling:ignore:`encryption.strictMode.ingress.enabled`
+     - Enable strict ingress encryption. When enabled, all unencrypted overlay ingress traffic will be dropped. This option is only applicable when WireGuard and tunneling are enabled.
      - bool
      - ``false``
    * - :spelling:ignore:`encryption.type`
@@ -1384,6 +1404,86 @@
      - Controls WireGuard PersistentKeepalive option. Set 0s to disable.
      - string
      - ``"0s"``
+   * - :spelling:ignore:`encryption.ztunnel`
+     - ztunnel encryption configuration. ztunnel is Istio's purpose-built, per-node proxy for handling L4 traffic in ambient mesh mode. These settings only apply when encryption.type is set to "ztunnel".
+     - object
+     - ``{"affinity":{},"annotations":{},"caAddress":"https://localhost:15012","extraEnv":[],"extraVolumeMounts":[],"extraVolumes":[],"healthPort":15021,"image":{"digest":null,"override":null,"pullPolicy":"IfNotPresent","repository":"docker.io/istio/ztunnel","tag":"1.28.0-distroless","useDigest":false},"nodeSelector":{"kubernetes.io/os":"linux"},"podAnnotations":{},"podLabels":{},"priorityClassName":null,"readinessProbe":{"failureThreshold":3,"initialDelaySeconds":0,"periodSeconds":10},"resources":{"requests":{"cpu":"200m","memory":"512Mi"}},"secrets":{"bootstrapRootCert":null},"terminationGracePeriodSeconds":30,"tolerations":[{"effect":"NoSchedule","operator":"Exists"},{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoExecute","operator":"Exists"}],"updateStrategy":{"rollingUpdate":{"maxSurge":1,"maxUnavailable":0},"type":"RollingUpdate"}}``
+   * - :spelling:ignore:`encryption.ztunnel.affinity`
+     - Affinity for ztunnel pods.
+     - object
+     - ``{}``
+   * - :spelling:ignore:`encryption.ztunnel.annotations`
+     - Annotations to be added to all ztunnel resources.
+     - object
+     - ``{}``
+   * - :spelling:ignore:`encryption.ztunnel.caAddress`
+     - CA server address for certificate requests.
+     - string
+     - ``"https://localhost:15012"``
+   * - :spelling:ignore:`encryption.ztunnel.extraEnv`
+     - Additional ztunnel container environment variables.
+     - list
+     - ``[]``
+   * - :spelling:ignore:`encryption.ztunnel.extraVolumeMounts`
+     - Additional ztunnel volumeMounts.
+     - list
+     - ``[]``
+   * - :spelling:ignore:`encryption.ztunnel.extraVolumes`
+     - Additional ztunnel volumes.
+     - list
+     - ``[]``
+   * - :spelling:ignore:`encryption.ztunnel.healthPort`
+     - TCP port for the health API.
+     - int
+     - ``15021``
+   * - :spelling:ignore:`encryption.ztunnel.image`
+     - ztunnel container image.
+     - object
+     - ``{"digest":null,"override":null,"pullPolicy":"IfNotPresent","repository":"docker.io/istio/ztunnel","tag":"1.28.0-distroless","useDigest":false}``
+   * - :spelling:ignore:`encryption.ztunnel.nodeSelector`
+     - Node selector for ztunnel pods.
+     - object
+     - ``{"kubernetes.io/os":"linux"}``
+   * - :spelling:ignore:`encryption.ztunnel.podAnnotations`
+     - Annotations to be added to ztunnel pods.
+     - object
+     - ``{}``
+   * - :spelling:ignore:`encryption.ztunnel.podLabels`
+     - Labels to be added to ztunnel pods.
+     - object
+     - ``{}``
+   * - :spelling:ignore:`encryption.ztunnel.priorityClassName`
+     - The priority class to use for ztunnel pods.
+     - string
+     - ``nil``
+   * - :spelling:ignore:`encryption.ztunnel.readinessProbe`
+     - Readiness probe configuration.
+     - object
+     - ``{"failureThreshold":3,"initialDelaySeconds":0,"periodSeconds":10}``
+   * - :spelling:ignore:`encryption.ztunnel.resources`
+     - ztunnel resource limits & requests.
+     - object
+     - ``{"requests":{"cpu":"200m","memory":"512Mi"}}``
+   * - :spelling:ignore:`encryption.ztunnel.secrets`
+     - ztunnel secrets configuration.
+     - object
+     - ``{"bootstrapRootCert":null}``
+   * - :spelling:ignore:`encryption.ztunnel.secrets.bootstrapRootCert`
+     - Base64-encoded bootstrap root certificate content. If not provided, the secret must be created manually before deploying. @schema type: [null, string] @schema
+     - string
+     - ``nil``
+   * - :spelling:ignore:`encryption.ztunnel.terminationGracePeriodSeconds`
+     - Configure termination grace period for ztunnel DaemonSet.
+     - int
+     - ``30``
+   * - :spelling:ignore:`encryption.ztunnel.tolerations`
+     - Node tolerations for ztunnel scheduling.
+     - list
+     - ``[{"effect":"NoSchedule","operator":"Exists"},{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoExecute","operator":"Exists"}]``
+   * - :spelling:ignore:`encryption.ztunnel.updateStrategy`
+     - ztunnel update strategy.
+     - object
+     - ``{"rollingUpdate":{"maxSurge":1,"maxUnavailable":0},"type":"RollingUpdate"}``
    * - :spelling:ignore:`endpointHealthChecking.enabled`
      - Enable connectivity health checking between virtual endpoints.
      - bool
@@ -1567,7 +1667,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:ba7726fb1f25b70bf1350e4c18f578b5a266603c5cf49b42df21b109db087945","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.35.9-1767266827-16c1066defb6f3be5c2090fb17e878573ea6039f","useDigest":true}``
+     - ``{"digest":"sha256:27d5429bb59dc6463dec15f0824065fafdce2fe0c214f17416fc1cb0b2e9b6f1","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.36.5-1768916005-32e6b51b774e6e90c980dcbba1d4cb607f2d43f3","useDigest":true}``
    * - :spelling:ignore:`envoy.initContainers`
      - Init containers added to the cilium Envoy DaemonSet.
      - list
@@ -2156,6 +2256,18 @@
      - Port to listen to.
      - string
      - ``"4245"``
+   * - :spelling:ignore:`hubble.relay.logOptions`
+     - Logging configuration for hubble-relay.
+     - object
+     - ``{"format":null,"level":null}``
+   * - :spelling:ignore:`hubble.relay.logOptions.format`
+     - Log format for hubble-relay. Valid values are: text, text-ts, json, json-ts.
+     - string
+     - text-ts
+   * - :spelling:ignore:`hubble.relay.logOptions.level`
+     - Log level for hubble-relay. Valid values are: debug, info, warn, error.
+     - string
+     - info
    * - :spelling:ignore:`hubble.relay.nodeSelector`
      - Node labels for pod assignment ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
      - object
@@ -2432,14 +2544,6 @@
      - Hubble-ui backend image.
      - object
      - ``{"digest":"sha256:db1454e45dc39ca41fbf7cad31eec95d99e5b9949c39daaad0fa81ef29d56953","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/hubble-ui-backend","tag":"v0.13.3","useDigest":true}``
-   * - :spelling:ignore:`hubble.ui.backend.livenessProbe.enabled`
-     - Enable liveness probe for Hubble-ui backend (requires Hubble-ui 0.12+)
-     - bool
-     - ``false``
-   * - :spelling:ignore:`hubble.ui.backend.readinessProbe.enabled`
-     - Enable readiness probe for Hubble-ui backend (requires Hubble-ui 0.12+)
-     - bool
-     - ``false``
    * - :spelling:ignore:`hubble.ui.backend.resources`
      - Resource requests and limits for the 'backend' container of the 'hubble-ui' deployment.
      - object
@@ -3200,6 +3304,10 @@
      - HostNetwork setting
      - bool
      - ``true``
+   * - :spelling:ignore:`operator.hostUsers`
+     - HostUsers setting (must be true if hostNetwork is true)
+     - bool
+     - ``true``
    * - :spelling:ignore:`operator.identityGCInterval`
      - Interval for identity garbage collection.
      - string
@@ -3443,7 +3551,7 @@
    * - :spelling:ignore:`preflight.envoy.image`
      - Envoy pre-flight image.
      - object
-     - ``{"digest":"sha256:ba7726fb1f25b70bf1350e4c18f578b5a266603c5cf49b42df21b109db087945","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.35.9-1767266827-16c1066defb6f3be5c2090fb17e878573ea6039f","useDigest":true}``
+     - ``{"digest":"sha256:27d5429bb59dc6463dec15f0824065fafdce2fe0c214f17416fc1cb0b2e9b6f1","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.36.5-1768916005-32e6b51b774e6e90c980dcbba1d4cb607f2d43f3","useDigest":true}``
    * - :spelling:ignore:`preflight.extraEnv`
      - Additional preflight environment variables.
      - list
@@ -3647,7 +3755,7 @@
    * - :spelling:ignore:`securityContext.capabilities.ciliumAgent`
      - Capabilities for the ``cilium-agent`` container
      - list
-     - ``["CHOWN","KILL","NET_ADMIN","NET_RAW","IPC_LOCK","SYS_MODULE","SYS_ADMIN","SYS_RESOURCE","DAC_OVERRIDE","FOWNER","SETGID","SETUID"]``
+     - ``["CHOWN","KILL","NET_ADMIN","NET_RAW","IPC_LOCK","SYS_MODULE","SYS_ADMIN","SYS_RESOURCE","DAC_OVERRIDE","FOWNER","SETGID","SETUID","SYSLOG"]``
    * - :spelling:ignore:`securityContext.capabilities.cleanCiliumState`
      - Capabilities for the ``clean-cilium-state`` init container
      - list
@@ -3684,6 +3792,10 @@
      - Enabled is temporary until https://github.com/cilium/cilium-cli/issues/1396 is implemented. Cilium CLI doesn't create the SAs for node-init, thus the workaround. Helm is not affected by this issue. Name and automount can be configured, if enabled is set to true. Otherwise, they are ignored. Enabled can be removed once the issue is fixed. Cilium-nodeinit DS must also be fixed.
      - bool
      - ``false``
+   * - :spelling:ignore:`serviceAccounts.ztunnel`
+     - Ztunnel is used if encryption.type=ztunnel
+     - object
+     - ``{"annotations":{},"automount":false,"create":true,"name":"ztunnel-cilium"}``
    * - :spelling:ignore:`serviceNoBackendResponse`
      - Configure what the response should be to traffic for a service without backends. Possible values:  - reject (default)  - drop
      - string
@@ -3857,7 +3969,7 @@
      - string
      - 0-0 to let the kernel driver decide the range
    * - :spelling:ignore:`underlayProtocol`
-     - IP family for the underlay.
+     - IP family for the underlay. Possible values:   - "ipv4"   - "ipv6"
      - string
      - ``"ipv4"``
    * - :spelling:ignore:`updateStrategy`

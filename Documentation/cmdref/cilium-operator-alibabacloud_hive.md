@@ -11,6 +11,8 @@ cilium-operator-alibabacloud hive [flags]
 ### Options
 
 ```
+      --alibaba-cloud-release-excess-ips                     Enable releasing excess free IP addresses from Alibaba Cloud ENI.
+      --alibaba-cloud-vpc-id string                          Specific VPC ID for AlibabaCloud ENI. If not set use same VPC as operator
       --ces-max-ciliumendpoints-per-ces int                  Maximum number of CiliumEndpoints allowed in a CES (default 100)
       --ces-rate-limits string                               Configure rate limits for the CES controller. Accepts a list of rate limit configurations, must be a JSON formatted string. (default "[{\"nodes\":0,\"limit\":10,\"burst\":20}]")
       --cluster-id uint32                                    Unique identifier of the cluster
@@ -80,6 +82,7 @@ cilium-operator-alibabacloud hive [flags]
       --loadbalancer-l7-algorithm string                     Default LB algorithm for services that do not specify related annotation (default "round_robin")
       --loadbalancer-l7-ports strings                        List of service ports that will be automatically redirected to backend.
       --max-connected-clusters uint32                        Maximum number of clusters to be connected in a clustermesh. Increasing this value will reduce the maximum number of identities available. Valid configurations are [255, 511]. (default 255)
+      --mesh-auth-enabled                                    Enable authentication processing & garbage collection (beta)
       --mesh-auth-mutual-enabled                             The flag to enable mutual authentication for the SPIRE server (beta).
       --mesh-auth-spiffe-trust-domain string                 The trust domain for the SPIFFE identity. (default "spiffe.cilium")
       --mesh-auth-spire-agent-socket string                  The path for the SPIRE admin agent Unix socket. (default "/run/spire/sockets/agent/agent.sock")
@@ -99,6 +102,7 @@ cilium-operator-alibabacloud hive [flags]
       --operator-prometheus-tls-cert-file string             Path to TLS certificate file for prometheus server. The file must contain PEM encoded data
       --operator-prometheus-tls-client-ca-files strings      Path to one or more TLS client CA certificates files to use for TLS with mutual authentication (mTLS) for prometheus server. The files must contain PEM encoded data. When provided, this option effectively enables mTLS.
       --operator-prometheus-tls-key-file string              Path to TLS private key file for prometheus server. The file must contain PEM encoded data.
+      --parallel-alloc-workers int                           Maximum number of parallel IPAM workers (default 50)
       --policy-default-local-cluster                         Control whether policy rules assume by default the local cluster if not explicitly selected (default true)
       --policy-secrets-namespace string                      Namespace where secrets used in TLS Interception will be synced to. (default "cilium-secrets")
       --shell-sock-path string                               Path to the shell UNIX socket (default "/var/run/cilium/shell.sock")

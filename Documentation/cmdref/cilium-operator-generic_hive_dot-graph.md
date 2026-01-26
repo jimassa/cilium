@@ -85,6 +85,7 @@ cilium-operator-generic hive dot-graph [flags]
       --loadbalancer-l7-algorithm string                     Default LB algorithm for services that do not specify related annotation (default "round_robin")
       --loadbalancer-l7-ports strings                        List of service ports that will be automatically redirected to backend.
       --max-connected-clusters uint32                        Maximum number of clusters to be connected in a clustermesh. Increasing this value will reduce the maximum number of identities available. Valid configurations are [255, 511]. (default 255)
+      --mesh-auth-enabled                                    Enable authentication processing & garbage collection (beta)
       --mesh-auth-mutual-enabled                             The flag to enable mutual authentication for the SPIRE server (beta).
       --mesh-auth-spiffe-trust-domain string                 The trust domain for the SPIFFE identity. (default "spiffe.cilium")
       --mesh-auth-spire-agent-socket string                  The path for the SPIRE admin agent Unix socket. (default "/run/spire/sockets/agent/agent.sock")
@@ -104,6 +105,7 @@ cilium-operator-generic hive dot-graph [flags]
       --operator-prometheus-tls-cert-file string             Path to TLS certificate file for prometheus server. The file must contain PEM encoded data
       --operator-prometheus-tls-client-ca-files strings      Path to one or more TLS client CA certificates files to use for TLS with mutual authentication (mTLS) for prometheus server. The files must contain PEM encoded data. When provided, this option effectively enables mTLS.
       --operator-prometheus-tls-key-file string              Path to TLS private key file for prometheus server. The file must contain PEM encoded data.
+      --parallel-alloc-workers int                           Maximum number of parallel IPAM workers (default 50)
       --policy-default-local-cluster                         Control whether policy rules assume by default the local cluster if not explicitly selected (default true)
       --policy-secrets-namespace string                      Namespace where secrets used in TLS Interception will be synced to. (default "cilium-secrets")
       --shell-sock-path string                               Path to the shell UNIX socket (default "/var/run/cilium/shell.sock")

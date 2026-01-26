@@ -57,6 +57,7 @@ type ciliumHealthManager struct {
 	healthSpec       *healthApi.Spec
 	sysctl           sysctl.Sysctl
 	loader           datapath.Loader
+	connectorConfig  datapath.ConnectorConfig
 	mtuConfig        mtu.MTU
 	bigTCPConfig     *bigtcp.Configuration
 	endpointCreator  endpointcreator.EndpointCreator
@@ -68,6 +69,7 @@ type ciliumHealthManager struct {
 	ctrlMgr      *controller.Manager
 	ciliumHealth *CiliumHealth
 
+	daemonConfig *option.DaemonConfig
 	healthConfig healthconfig.CiliumHealthConfig
 }
 
@@ -80,6 +82,7 @@ type ciliumHealthParams struct {
 	HealthSpec             *healthApi.Spec
 	Sysctl                 sysctl.Sysctl
 	Loader                 datapath.Loader
+	ConnectorConfig        datapath.ConnectorConfig
 	MtuConfig              mtu.MTU
 	BigTCPConfig           *bigtcp.Configuration
 	EndpointCreator        endpointcreator.EndpointCreator
@@ -88,6 +91,7 @@ type ciliumHealthParams struct {
 	K8sClientSet           k8sClient.Clientset
 	InfraIPAllocator       infraendpoints.InfraIPAllocator
 	LocalNodeStore         *node.LocalNodeStore
+	DaemonConfig           *option.DaemonConfig
 	Config                 healthconfig.CiliumHealthConfig
 }
 
@@ -98,6 +102,7 @@ func newCiliumHealthManager(params ciliumHealthParams) CiliumHealthManager {
 		healthSpec:       params.HealthSpec,
 		sysctl:           params.Sysctl,
 		loader:           params.Loader,
+		connectorConfig:  params.ConnectorConfig,
 		mtuConfig:        params.MtuConfig,
 		bigTCPConfig:     params.BigTCPConfig,
 		endpointCreator:  params.EndpointCreator,
@@ -105,6 +110,7 @@ func newCiliumHealthManager(params ciliumHealthParams) CiliumHealthManager {
 		k8sClientSet:     params.K8sClientSet,
 		infraIPAllocator: params.InfraIPAllocator,
 		localNodeStore:   params.LocalNodeStore,
+		daemonConfig:     params.DaemonConfig,
 		healthConfig:     params.Config,
 	}
 	if !params.Config.IsHealthCheckingEnabled() {

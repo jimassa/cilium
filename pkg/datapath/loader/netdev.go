@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/netip"
+	"os"
 	"slices"
 	"strings"
 
@@ -113,7 +114,16 @@ func removeObsoleteNetdevPrograms(logger *slog.Logger, devices []string) error {
 		if err := bpf.Remove(bpffsPath); err != nil {
 			logger.Error("Failed to remove bpffs entry",
 				logfields.Error, err,
-				logfields.BPFSPath, bpffsPath,
+				logfields.BPFFSPath, bpffsPath,
+			)
+		}
+
+		// Remove the per-device state directory.
+		statePath := bpfStateDeviceDir(l.Attrs().Name)
+		if err := os.RemoveAll(statePath); err != nil {
+			logger.Error("Failed to remove device state directory",
+				logfields.Error, err,
+				logfields.Path, statePath,
 			)
 		}
 

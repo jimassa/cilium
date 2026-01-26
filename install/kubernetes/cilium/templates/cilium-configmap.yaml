@@ -706,6 +706,7 @@ data:
   enable-ipv4-big-tcp: {{ .Values.enableIPv4BIGTCP | quote }}
   enable-ipv6-big-tcp: {{ .Values.enableIPv6BIGTCP | quote }}
   enable-ipv6-masquerade: {{ .Values.enableIPv6Masquerade | quote }}
+  enable-tunnel-big-tcp: {{ .Values.enableTunnelBIGTCP | quote }}
 
 {{- if hasKey .Values.bpf "enableTCX" }}
   enable-tcx: {{ .Values.bpf.enableTCX | quote }}
@@ -759,11 +760,20 @@ data:
 {{- end }}
 
 {{- if .Values.encryption.strictMode.enabled }}
-  enable-encryption-strict-mode: {{ .Values.encryption.strictMode.enabled | quote }}
+  # --- DEPRECATED: Please use encryption.strictMode.egress.enabled instead
+  enable-encryption-strict-mode-egress: {{ .Values.encryption.strictMode.enabled | quote }}
+  encryption-strict-egress-cidr: {{ .Values.encryption.strictMode.cidr | quote }}
+  encryption-strict-egress-allow-remote-node-identities: {{ .Values.encryption.strictMode.allowRemoteNodeIdentities | quote }}
+{{- end }}
 
-  encryption-strict-mode-cidr: {{ .Values.encryption.strictMode.cidr | quote }}
+{{- if .Values.encryption.strictMode.ingress.enabled }}
+  enable-encryption-strict-mode-ingress: {{ .Values.encryption.strictMode.ingress.enabled | quote }}
+{{- end }}
 
-  encryption-strict-mode-allow-remote-node-identities: {{ .Values.encryption.strictMode.allowRemoteNodeIdentities | quote }}
+{{- if .Values.encryption.strictMode.egress.enabled }}
+  enable-encryption-strict-mode-egress: {{ .Values.encryption.strictMode.egress.enabled | quote }}
+  encryption-strict-egress-cidr: {{ .Values.encryption.strictMode.egress.cidr | quote }}
+  encryption-strict-egress-allow-remote-node-identities: {{ .Values.encryption.strictMode.egress.allowRemoteNodeIdentities | quote }}
 {{- end }}
 
   enable-xt-socket-fallback: {{ .Values.enableXTSocketFallback | quote }}

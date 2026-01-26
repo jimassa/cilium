@@ -26,7 +26,6 @@ import (
 	dpdef "github.com/cilium/cilium/pkg/datapath/linux/config/defines"
 	"github.com/cilium/cilium/pkg/datapath/linux/safenetlink"
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
-	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
@@ -233,12 +232,12 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		cDefinesMap["SERVICE_NO_BACKEND_RESPONSE"] = "1"
 	}
 
-	if option.Config.EnableEncryptionStrictMode {
-		cDefinesMap["ENCRYPTION_STRICT_MODE"] = "1"
+	if option.Config.EnableEncryptionStrictModeEgress {
+		cDefinesMap["ENCRYPTION_STRICT_MODE_EGRESS"] = "1"
 
 		// when parsing the user input we only accept ipv4 addresses
-		cDefinesMap["STRICT_IPV4_NET"] = fmt.Sprintf("%#x", byteorder.NetIPAddrToHost32(option.Config.EncryptionStrictModeCIDR.Addr()))
-		cDefinesMap["STRICT_IPV4_NET_SIZE"] = fmt.Sprintf("%d", option.Config.EncryptionStrictModeCIDR.Bits())
+		cDefinesMap["STRICT_IPV4_NET"] = fmt.Sprintf("%#x", byteorder.NetIPAddrToHost32(option.Config.EncryptionStrictEgressCIDR.Addr()))
+		cDefinesMap["STRICT_IPV4_NET_SIZE"] = fmt.Sprintf("%d", option.Config.EncryptionStrictEgressCIDR.Bits())
 
 		cDefinesMap["IPV4_ENCRYPT_IFACE"] = fmt.Sprintf("%#x", byteorder.NetIPv4ToHost32(cfg.NodeIPv4))
 
@@ -247,11 +246,11 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 			return fmt.Errorf("unable to parse node IPv4 address %s", cfg.NodeIPv4)
 		}
 
-		if option.Config.EncryptionStrictModeCIDR.Contains(ipv4Interface) {
-			if !option.Config.EncryptionStrictModeAllowRemoteNodeIdentities {
+		if option.Config.EncryptionStrictEgressCIDR.Contains(ipv4Interface) {
+			if !option.Config.EncryptionStrictEgressAllowRemoteNodeIdentities {
 				return fmt.Errorf(`encryption strict mode is enabled but the node's IPv4 address is within the strict CIDR range.
 				This will cause the node to drop all traffic.
-				Please either disable encryption or set --encryption-strict-mode-allow-dynamic-lookup=true`)
+				Please either disable encryption or set --encryption-strict-egress-allow-remote-node-identities=true`)
 			}
 			cDefinesMap["STRICT_IPV4_OVERLAPPING_CIDR"] = "1"
 		}
@@ -263,10 +262,6 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		cDefinesMap["ENABLE_TPROXY"] = "1"
 	}
 
-	if option.Config.EnableXDPPrefilter {
-		cDefinesMap["ENABLE_PREFILTER"] = "1"
-	}
-
 	if option.Config.EnableEndpointRoutes {
 		cDefinesMap["ENABLE_ENDPOINT_ROUTES"] = "1"
 	}
@@ -276,15 +271,15 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	}
 
 	if h.kprCfg.EnableSocketLB {
-		if option.Config.BPFSocketLBHostnsOnly {
+		if option.Config.UnsafeDaemonConfigOption.BPFSocketLBHostnsOnly {
 			cDefinesMap["ENABLE_SOCKET_LB_HOST_ONLY"] = "1"
 		} else {
 			cDefinesMap["ENABLE_SOCKET_LB_FULL"] = "1"
 		}
-		if option.Config.EnableSocketLBPeer {
+		if option.Config.UnsafeDaemonConfigOption.EnableSocketLBPeer {
 			cDefinesMap["ENABLE_SOCKET_LB_PEER"] = "1"
 		}
-		if option.Config.EnableSocketLBTracing {
+		if option.Config.UnsafeDaemonConfigOption.EnableSocketLBTracing {
 			cDefinesMap["TRACE_SOCK_NOTIFY"] = "1"
 		}
 
@@ -311,7 +306,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	cDefinesMap["NODEPORT_NEIGH4_SIZE"] = fmt.Sprintf("%d", option.Config.NeighMapEntriesGlobal)
 
 	if h.kprCfg.KubeProxyReplacement {
-		if option.Config.EnableHealthDatapath {
+		if option.Config.UnsafeDaemonConfigOption.EnableHealthDatapath {
 			cDefinesMap["ENABLE_HEALTH_CHECK"] = "1"
 		}
 		if option.Config.EnableMKE && h.kprCfg.EnableSocketLB {
@@ -363,8 +358,8 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		}
 		if option.Config.EnableIPv4 {
 			if option.Config.LoadBalancerRSSv4CIDR != "" {
-				ipv4 := byteorder.NetIPv4ToHost32(option.Config.LoadBalancerRSSv4.IP)
-				ones, _ := option.Config.LoadBalancerRSSv4.Mask.Size()
+				ipv4 := byteorder.NetIPv4ToHost32(option.Config.UnsafeDaemonConfigOption.LoadBalancerRSSv4.IP)
+				ones, _ := option.Config.UnsafeDaemonConfigOption.LoadBalancerRSSv4.Mask.Size()
 				cDefinesMap["IPV4_RSS_PREFIX"] = fmt.Sprintf("%d", ipv4)
 				cDefinesMap["IPV4_RSS_PREFIX_BITS"] = fmt.Sprintf("%d", ones)
 			} else {
@@ -374,8 +369,8 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		}
 		if option.Config.EnableIPv6 {
 			if option.Config.LoadBalancerRSSv6CIDR != "" {
-				ipv6 := option.Config.LoadBalancerRSSv6.IP
-				ones, _ := option.Config.LoadBalancerRSSv6.Mask.Size()
+				ipv6 := option.Config.UnsafeDaemonConfigOption.LoadBalancerRSSv6.IP
+				ones, _ := option.Config.UnsafeDaemonConfigOption.LoadBalancerRSSv6.Mask.Size()
 				extraMacrosMap["IPV6_RSS_PREFIX"] = ipv6.String()
 				fw.WriteString(FmtDefineAddress("IPV6_RSS_PREFIX", ipv6))
 				cDefinesMap["IPV6_RSS_PREFIX_BITS"] = fmt.Sprintf("%d", ones)
@@ -388,7 +383,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		if option.Config.NodePortAcceleration != option.NodePortAccelerationDisabled {
 			cDefinesMap["ENABLE_NODEPORT_ACCELERATION"] = "1"
 		}
-		if !option.Config.EnableHostLegacyRouting {
+		if !option.Config.UnsafeDaemonConfigOption.EnableHostLegacyRouting {
 			cDefinesMap["ENABLE_HOST_ROUTING"] = "1"
 		}
 	}
@@ -533,7 +528,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		cDefinesMap["ENABLE_IDENTITY_MARK"] = "1"
 	}
 
-	if option.Config.EnableVTEP {
+	if option.Config.IPv4Enabled() && option.Config.EnableVTEP {
 		cDefinesMap["ENABLE_VTEP"] = "1"
 	}
 
@@ -587,7 +582,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		}
 	}
 
-	if option.Config.EnableIPIPDevices {
+	if option.Config.UnsafeDaemonConfigOption.EnableIPIPDevices {
 		if option.Config.IPv4Enabled() {
 			ipip4, err := safenetlink.LinkByName(defaults.IPIPv4Device)
 			if err != nil {
@@ -606,10 +601,6 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		cDefinesMap["ENCAP4_IFINDEX"] = "0"
 		cDefinesMap["ENCAP6_IFINDEX"] = "0"
 	}
-
-	// Write Identity related macros.
-	fmt.Fprint(fw, declareConfig("identity_length", identity.GetClusterIDShift(), "Identity length in bits"))
-	fmt.Fprint(fw, assignConfig("identity_length", identity.GetClusterIDShift()))
 
 	fmt.Fprint(fw, declareConfig("interface_ifindex", uint32(0), "ifindex of the interface the bpf program is attached to"))
 
@@ -773,14 +764,12 @@ func (h *HeaderfileWriter) WriteNetdevConfig(w io.Writer, opts *option.IntOption
 func (h *HeaderfileWriter) WriteEndpointConfig(w io.Writer, cfg *datapath.LocalNodeConfiguration, e datapath.EndpointConfiguration) error {
 	fw := bufio.NewWriter(w)
 
-	deviceNames := cfg.DeviceNames()
-
 	writeIncludes(w)
 
-	return h.writeTemplateConfig(fw, deviceNames, cfg.HostEndpointID, e, cfg.DirectRoutingDevice)
+	return h.writeTemplateConfig(fw, cfg, e)
 }
 
-func (h *HeaderfileWriter) writeTemplateConfig(fw *bufio.Writer, devices []string, hostEndpointID uint64, e datapath.EndpointConfiguration, drd *tables.Device) error {
+func (h *HeaderfileWriter) writeTemplateConfig(fw *bufio.Writer, cfg *datapath.LocalNodeConfiguration, e datapath.EndpointConfiguration) error {
 	if e.RequireEgressProg() {
 		fmt.Fprintf(fw, "#define USE_BPF_PROG_FOR_INGRESS_POLICY 1\n")
 	}
@@ -794,7 +783,7 @@ func (h *HeaderfileWriter) writeTemplateConfig(fw *bufio.Writer, devices []strin
 		fmt.Fprintf(fw, "#define HOST_ENDPOINT 1\n")
 	}
 
-	if e.IsHost() || option.Config.DatapathMode != datapathOption.DatapathModeNetkit {
+	if option.Config.IPv4Enabled() && (e.IsHost() || cfg.DatapathIsLayer2) {
 		if e.RequireARPPassthrough() {
 			fmt.Fprint(fw, "#define ENABLE_ARP_PASSTHROUGH 1\n")
 		} else {
@@ -813,7 +802,7 @@ func (h *HeaderfileWriter) writeTemplateConfig(fw *bufio.Writer, devices []strin
 // WriteTemplateConfig writes the BPF configuration for the template to a writer.
 func (h *HeaderfileWriter) WriteTemplateConfig(w io.Writer, cfg *datapath.LocalNodeConfiguration, e datapath.EndpointConfiguration) error {
 	fw := bufio.NewWriter(w)
-	return h.writeTemplateConfig(fw, cfg.DeviceNames(), cfg.HostEndpointID, e, cfg.DirectRoutingDevice)
+	return h.writeTemplateConfig(fw, cfg, e)
 }
 
 func preferredIPv6Address(deviceAddresses []tables.DeviceAddress) netip.Addr {

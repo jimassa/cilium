@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	fakeTypes "github.com/cilium/cilium/pkg/datapath/fake/types"
+	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/kpr"
@@ -25,6 +26,7 @@ type mockFeaturesParams struct {
 	bigTCPMock                          bigTCPMock
 	L2PodAnnouncement                   bool
 	isDynamicConfigSourceKindNodeConfig bool
+	ConnectorConfig                     types.ConnectorConfig
 }
 
 func (m mockFeaturesParams) TunnelProtocol() tunnel.EncapProtocol {
@@ -55,9 +57,24 @@ func (m mockFeaturesParams) IsDynamicConfigSourceKindNodeConfig() bool {
 	return m.isDynamicConfigSourceKindNodeConfig
 }
 
+func (m mockFeaturesParams) DatapathConfiguredMode() string {
+	if m.ConnectorConfig != nil {
+		return m.ConnectorConfig.GetConfiguredMode().String()
+	}
+	return "mocked"
+}
+
+func (m mockFeaturesParams) DatapathOperationalMode() string {
+	if m.ConnectorConfig != nil {
+		return m.ConnectorConfig.GetOperationalMode().String()
+	}
+	return "mocked"
+}
+
 type bigTCPMock struct {
-	ipv4Enabled bool
-	ipv6Enabled bool
+	ipv4Enabled   bool
+	ipv6Enabled   bool
+	tunnelEnabled bool
 }
 
 func (b bigTCPMock) IsIPv4Enabled() bool {
@@ -66,6 +83,10 @@ func (b bigTCPMock) IsIPv4Enabled() bool {
 
 func (b bigTCPMock) IsIPv6Enabled() bool {
 	return b.ipv6Enabled
+}
+
+func (b bigTCPMock) IsTunnelEnabled() bool {
+	return b.tunnelEnabled
 }
 
 func TestUpdateNetworkMode(t *testing.T) {
@@ -101,7 +122,7 @@ func TestUpdateNetworkMode(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 				RoutingMode:            tt.tunnelMode,
 			}
@@ -154,7 +175,7 @@ func TestUpdateIPAMMode(t *testing.T) {
 			config := &option.DaemonConfig{
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 				IPAM:                   tt.IPAMMode,
 			}
@@ -207,7 +228,7 @@ func TestUpdateCNIChainingMode(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 			}
 
@@ -268,7 +289,7 @@ func TestUpdateInternetProtocol(t *testing.T) {
 			config := &option.DaemonConfig{
 				IPAM:                   defaultIPAMModes[0],
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 				EnableIPv4:             tt.enableIPv4,
 				EnableIPv6:             tt.enableIPv6,
@@ -321,7 +342,7 @@ func TestUpdateIdentityAllocationMode(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				IdentityAllocationMode: tt.identityAllocationMode,
 			}
 			lbConfig := loadbalancer.DefaultConfig
@@ -375,7 +396,7 @@ func TestUpdateCiliumEndpointSlices(t *testing.T) {
 				IPAM:                      defaultIPAMModes[0],
 				EnableIPv4:                true,
 				IdentityAllocationMode:    defaultIdentityAllocationModes[0],
-				DatapathMode:              defaultDeviceModes[0],
+				DatapathMode:              defaultConfiguredDatapathMode,
 				NodePortAcceleration:      defaultNodePortModeAccelerations[0],
 				EnableCiliumEndpointSlice: tt.enableCES,
 			}
@@ -398,18 +419,48 @@ func TestUpdateCiliumEndpointSlices(t *testing.T) {
 }
 
 func TestUpdateDeviceMode(t *testing.T) {
-	type testCase struct {
-		name         string
-		deviceMode   string
-		expectedMode string
-	}
-	var tests []testCase
-	for _, mode := range defaultDeviceModes {
-		tests = append(tests, testCase{
-			name:         fmt.Sprintf("Device %s mode", mode),
-			deviceMode:   mode,
-			expectedMode: mode,
-		})
+	tests := []struct {
+		name                    string
+		configuredMode          types.ConnectorMode
+		operationalMode         types.ConnectorMode
+		expectedConfiguredMode  string
+		expectedOperationalMode string
+	}{
+		{
+			name:                    "veth/veth",
+			configuredMode:          types.ConnectorModeVeth,
+			operationalMode:         types.ConnectorModeVeth,
+			expectedConfiguredMode:  datapathOption.DatapathModeVeth,
+			expectedOperationalMode: datapathOption.DatapathModeVeth,
+		},
+		{
+			name:                    "netkit/netkit",
+			configuredMode:          types.ConnectorModeNetkit,
+			operationalMode:         types.ConnectorModeNetkit,
+			expectedConfiguredMode:  datapathOption.DatapathModeNetkit,
+			expectedOperationalMode: datapathOption.DatapathModeNetkit,
+		},
+		{
+			name:                    "netkit-l2/netkit-l2",
+			configuredMode:          types.ConnectorModeNetkitL2,
+			operationalMode:         types.ConnectorModeNetkitL2,
+			expectedConfiguredMode:  datapathOption.DatapathModeNetkitL2,
+			expectedOperationalMode: datapathOption.DatapathModeNetkitL2,
+		},
+		{
+			name:                    "auto/veth",
+			configuredMode:          types.ConnectorModeAuto,
+			operationalMode:         types.ConnectorModeVeth,
+			expectedConfiguredMode:  datapathOption.DatapathModeAuto,
+			expectedOperationalMode: datapathOption.DatapathModeVeth,
+		},
+		{
+			name:                    "auto/netkit",
+			configuredMode:          types.ConnectorModeAuto,
+			operationalMode:         types.ConnectorModeNetkit,
+			expectedConfiguredMode:  datapathOption.DatapathModeAuto,
+			expectedOperationalMode: datapathOption.DatapathModeNetkit,
+		},
 	}
 
 	for _, tt := range tests {
@@ -420,7 +471,6 @@ func TestUpdateDeviceMode(t *testing.T) {
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
-				DatapathMode:           tt.deviceMode,
 			}
 			lbConfig := loadbalancer.DefaultConfig
 			lbConfig.LBAlgorithm = defaultNodePortModeAlgorithms[0]
@@ -428,20 +478,25 @@ func TestUpdateDeviceMode(t *testing.T) {
 
 			params := mockFeaturesParams{
 				CNIChainingMode: defaultChainingModes[0],
+				ConnectorConfig: fakeTypes.NewFakeConnectorConfig(tt.configuredMode, tt.operationalMode),
 			}
 
 			metrics.update(params, config, lbConfig, kpr.KPRConfig{}, fakeTypes.WireguardConfig{}, fakeTypes.IPsecConfig{})
 
-			// Check that only the expected mode's counter is incremented
-			for _, mode := range defaultDeviceModes {
-				counter, err := metrics.DPDeviceConfig.GetMetricWithLabelValues(mode)
-				assert.NoError(t, err)
+			// Check that only the expected mode counters are incremented
+			for _, configuredMode := range defaultConfiguredDatapathModes {
+				for _, operationalMode := range defaultOperationalDatapathModes {
+					counter, err := metrics.DPDeviceConfig.GetMetricWithLabelValues(configuredMode, operationalMode)
+					assert.NoError(t, err)
 
-				counterValue := counter.Get()
-				if mode == tt.expectedMode {
-					assert.Equal(t, float64(1), counterValue, "Expected mode %s to be incremented", mode)
-				} else {
-					assert.Equal(t, float64(0), counterValue, "Expected mode %s to remain at 0", mode)
+					counterValue := counter.Get()
+					if configuredMode == tt.expectedConfiguredMode && operationalMode == tt.expectedOperationalMode {
+						assert.Equal(t, float64(1), counterValue, "Expected mode %s/%s to be incremented",
+							configuredMode, operationalMode)
+					} else {
+						assert.Equal(t, float64(0), counterValue, "Expected mode %s/%s to remain at 0",
+							configuredMode, operationalMode)
+					}
 				}
 			}
 		})
@@ -473,7 +528,7 @@ func TestUpdateHostFirewall(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 				EnableHostFirewall:     tt.enableHostFirewall,
 			}
@@ -518,7 +573,7 @@ func TestUpdateLocalRedirectPolicies(t *testing.T) {
 				IPAM:                      defaultIPAMModes[0],
 				EnableIPv4:                true,
 				IdentityAllocationMode:    defaultIdentityAllocationModes[0],
-				DatapathMode:              defaultDeviceModes[0],
+				DatapathMode:              defaultConfiguredDatapathMode,
 				NodePortAcceleration:      defaultNodePortModeAccelerations[0],
 				EnableLocalRedirectPolicy: tt.enableLRP,
 			}
@@ -563,7 +618,7 @@ func TestUpdateMutualAuth(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 			}
 
@@ -609,7 +664,7 @@ func TestUpdateNonDefaultDeny(t *testing.T) {
 				IPAM:                         defaultIPAMModes[0],
 				EnableIPv4:                   true,
 				IdentityAllocationMode:       defaultIdentityAllocationModes[0],
-				DatapathMode:                 defaultDeviceModes[0],
+				DatapathMode:                 defaultConfiguredDatapathMode,
 				NodePortAcceleration:         defaultNodePortModeAccelerations[0],
 				EnableNonDefaultDenyPolicies: tt.enableNonDefaultDeny,
 			}
@@ -652,7 +707,7 @@ func TestUpdateCIDRPolicyModeToNode(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 				PolicyCIDRMatchMode:    []string{tt.policyMode},
 			}
@@ -772,13 +827,13 @@ func TestUpdateEncryptionMode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			metrics := NewMetrics(true)
 			config := &option.DaemonConfig{
-				IPAM:                       defaultIPAMModes[0],
-				EnableIPv4:                 true,
-				IdentityAllocationMode:     defaultIdentityAllocationModes[0],
-				DatapathMode:               defaultDeviceModes[0],
-				NodePortAcceleration:       defaultNodePortModeAccelerations[0],
-				EncryptNode:                tt.enableNode2NodeEncryption,
-				EnableEncryptionStrictMode: tt.enableStrictMode,
+				IPAM:                             defaultIPAMModes[0],
+				EnableIPv4:                       true,
+				IdentityAllocationMode:           defaultIdentityAllocationModes[0],
+				DatapathMode:                     defaultConfiguredDatapathMode,
+				NodePortAcceleration:             defaultNodePortModeAccelerations[0],
+				EncryptNode:                      tt.enableNode2NodeEncryption,
+				EnableEncryptionStrictModeEgress: tt.enableStrictMode,
 			}
 
 			lbConfig := loadbalancer.DefaultConfig
@@ -838,7 +893,7 @@ func TestUpdateKubeProxyReplacement(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 			}
 
@@ -894,7 +949,7 @@ func TestUpdateNodePortConfig(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   tt.accelerationMode,
 			}
 
@@ -954,7 +1009,7 @@ func TestUpdateBGP(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 				EnableBGPControlPlane:  tt.bgpControlPlane,
 			}
@@ -1000,7 +1055,7 @@ func TestUpdateIPv4EgressGateway(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 				EnableEgressGateway:    tt.enableEGW,
 			}
@@ -1047,7 +1102,7 @@ func TestUpdateBandwidthManager(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 			}
 
@@ -1094,7 +1149,7 @@ func TestUpdateSCTP(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 			}
 
@@ -1140,7 +1195,7 @@ func TestUpdateVTEP(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 			}
 
@@ -1186,7 +1241,7 @@ func TestUpdateEnvoyConfig(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 			}
 
@@ -1211,6 +1266,7 @@ func TestUpdateBigTCPProtocol(t *testing.T) {
 		name             string
 		enableIPv4       bool
 		enableIPv6       bool
+		enableTunnel     bool
 		expectedProtocol string
 	}{
 		{
@@ -1237,7 +1293,7 @@ func TestUpdateBigTCPProtocol(t *testing.T) {
 			config := &option.DaemonConfig{
 				IPAM:                   defaultIPAMModes[0],
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 				EnableIPv4:             true,
 			}
@@ -1249,8 +1305,9 @@ func TestUpdateBigTCPProtocol(t *testing.T) {
 			params := mockFeaturesParams{
 				CNIChainingMode: defaultChainingModes[0],
 				bigTCPMock: bigTCPMock{
-					ipv4Enabled: tt.enableIPv4,
-					ipv6Enabled: tt.enableIPv6,
+					ipv4Enabled:   tt.enableIPv4,
+					ipv6Enabled:   tt.enableIPv6,
+					tunnelEnabled: tt.enableTunnel,
 				},
 			}
 
@@ -1298,7 +1355,7 @@ func TestUpdateL2Announcements(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 			}
 
@@ -1343,7 +1400,7 @@ func TestUpdateL2PodAnnouncements(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 			}
 
@@ -1390,7 +1447,7 @@ func TestUpdateExtEnvoyProxyMode(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 			}
 
@@ -1445,7 +1502,7 @@ func TestUpdateDynamicNodeConfig(t *testing.T) {
 				IPAM:                   defaultIPAMModes[0],
 				EnableIPv4:             true,
 				IdentityAllocationMode: defaultIdentityAllocationModes[0],
-				DatapathMode:           defaultDeviceModes[0],
+				DatapathMode:           defaultConfiguredDatapathMode,
 				NodePortAcceleration:   defaultNodePortModeAccelerations[0],
 			}
 

@@ -6,6 +6,7 @@
 
 #include <bpf/config/node.h>
 #include <bpf/config/global.h>
+#include <bpf/config/overlay.h>
 #include <netdev_config.h>
 
 #define IS_BPF_OVERLAY 1
@@ -517,7 +518,7 @@ int cil_from_overlay(struct __ctx_buff *ctx)
 {
 	__u32 src_sec_identity = 0;
 	__s8 ext_err = 0;
-	__u16 proto;
+	__be16 proto;
 	int ret;
 
 	bpf_clear_meta(ctx);
@@ -529,6 +530,21 @@ int cil_from_overlay(struct __ctx_buff *ctx)
 		ret = CTX_ACT_OK;
 		goto out;
 	}
+
+#if defined(ENABLE_WIREGUARD) && defined(ENABLE_IDENTITY_MARK)
+	/* When wireguard is enabled we should drop any traffic coming through the tunnel
+	 * that previously wasn't marked as decrypted by cilium.
+	 */
+	if (CONFIG(encryption_strict_ingress) && !ctx_is_decrypt(ctx)) {
+		ret = DROP_UNENCRYPTED_TRAFFIC;
+		goto out;
+	}
+	/* We only needed the mark to decide if we need to drop the packet here.
+	 * To not cause any further collision with the `decrypted` variable,
+	 * clear the decrypted bit.
+	 */
+	ctx->mark &= ~MARK_MAGIC_HOST_MASK;
+#endif
 
 	switch (proto) {
 #if defined(ENABLE_IPV4) || defined(ENABLE_IPV6)
@@ -616,7 +632,7 @@ int cil_to_overlay(struct __ctx_buff *ctx)
 	__u32 src_sec_identity = UNKNOWN_ID;
 	int ret = TC_ACT_OK;
 	__u32 cluster_id __maybe_unused = 0;
-	__be16 __maybe_unused proto = 0;
+	__be16 proto = 0;
 	__s8 ext_err = 0;
 
 	bpf_clear_meta(ctx);

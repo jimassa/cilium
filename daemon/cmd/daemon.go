@@ -14,10 +14,8 @@ import (
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
-	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/node"
-	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	policyAPI "github.com/cilium/cilium/pkg/policy/api"
 	policytypes "github.com/cilium/cilium/pkg/policy/types"
@@ -47,6 +45,14 @@ func initAndValidateDaemonConfig(params daemonConfigParams) error {
 		}
 	}
 
+	if params.IPSecConfig.Enabled() && params.DaemonConfig.EnableEncryptionStrictModeIngress {
+		return fmt.Errorf("IPSec doesnt support strict ingress encryption.")
+	}
+
+	if params.DaemonConfig.EnableEncryptionStrictModeIngress && !params.DaemonConfig.TunnelingEnabled() {
+		return fmt.Errorf("Strict ingress encryption requires tunneling to be enabled.")
+	}
+
 	if params.DaemonConfig.EnableHostFirewall {
 		if params.IPSecConfig.Enabled() {
 			return fmt.Errorf("IPSec cannot be used with the host firewall.")
@@ -69,7 +75,7 @@ func initAndValidateDaemonConfig(params daemonConfigParams) error {
 	// that may be added or removed at runtime.
 	if params.IPSecConfig.Enabled() &&
 		!params.DaemonConfig.TunnelingEnabled() &&
-		len(params.DaemonConfig.EncryptInterface) == 0 &&
+		len(params.DaemonConfig.UnsafeDaemonConfigOption.EncryptInterface) == 0 &&
 		// If devices are required, we don't look at the EncryptInterface, as we
 		// don't load bpf_network in loader.reinitializeIPSec. Instead, we load
 		// bpf_host onto physical devices as chosen by configuration.
@@ -79,7 +85,7 @@ func initAndValidateDaemonConfig(params daemonConfigParams) error {
 		if err != nil {
 			return fmt.Errorf("Ipsec default interface lookup failed, consider \"encrypt-interface\" to manually configure interface. Err: %w", err)
 		}
-		params.DaemonConfig.EncryptInterface = append(params.DaemonConfig.EncryptInterface, link)
+		params.DaemonConfig.UnsafeDaemonConfigOption.EncryptInterface = append(params.DaemonConfig.UnsafeDaemonConfigOption.EncryptInterface, link)
 	}
 
 	// Do the partial kube-proxy replacement initialization before creating BPF
@@ -97,8 +103,8 @@ func initAndValidateDaemonConfig(params daemonConfigParams) error {
 		// pods. Therefore unless the AllowLocalhost policy is set to a
 		// specific mode, always allow localhost to reach local
 		// endpoints.
-		if params.DaemonConfig.AllowLocalhost == option.AllowLocalhostAuto {
-			params.DaemonConfig.AllowLocalhost = option.AllowLocalhostAlways
+		if params.DaemonConfig.UnsafeDaemonConfigOption.AllowLocalhost == option.AllowLocalhostAuto {
+			params.DaemonConfig.UnsafeDaemonConfigOption.AllowLocalhost = option.AllowLocalhostAlways
 			params.Logger.Info("k8s mode: Allowing localhost to reach local endpoints")
 		}
 	}
@@ -147,7 +153,7 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 			params.NodeDiscovery.UpdateCiliumNodeResource()
 		}
 
-		if err := agentK8s.WaitForNodeInformation(ctx, params.Logger, params.Resources.LocalNode, params.Resources.LocalCiliumNode); err != nil {
+		if err := agentK8s.WaitForNodeInformation(ctx, params.Logger, params.LocalNodeRes, params.LocalCiliumNodeRes); err != nil {
 			return fmt.Errorf("unable to connect to get node spec from apiserver: %w", err)
 		}
 
@@ -194,13 +200,10 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 	// Configure and start IPAM without using the configuration yet.
 	configureAndStartIPAM(ctx, params)
 
-	bootstrapStats.restore.Start()
 	// restore endpoints before any IPs are allocated to avoid eventual IP
 	// conflicts later on, otherwise any IP conflict will result in the
 	// endpoint not being able to be restored.
-	err := params.EndpointRestorer.RestoreOldEndpoints()
-	bootstrapStats.restore.EndError(err)
-	if err != nil {
+	if err := params.EndpointRestorer.RestoreOldEndpoints(); err != nil {
 		return err
 	}
 
@@ -217,36 +220,7 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 
 	// Annotation of the k8s node must happen after discovery of the
 	// PodCIDR range and allocation of the health IPs.
-	if params.Clientset.IsEnabled() && params.DaemonConfig.AnnotateK8sNode {
-		bootstrapStats.k8sInit.Start()
-		params.Logger.Info("Annotating k8s node",
-			logfields.V4Prefix, node.GetIPv4AllocRange(params.Logger),
-			logfields.V6Prefix, node.GetIPv6AllocRange(params.Logger),
-			logfields.V4HealthIP, node.GetEndpointHealthIPv4(params.Logger),
-			logfields.V6HealthIP, node.GetEndpointHealthIPv6(params.Logger),
-			logfields.V4IngressIP, node.GetIngressIPv4(params.Logger),
-			logfields.V6IngressIP, node.GetIngressIPv6(params.Logger),
-			logfields.V4CiliumHostIP, node.GetInternalIPv4Router(params.Logger),
-			logfields.V6CiliumHostIP, node.GetIPv6Router(params.Logger),
-		)
-
-		latestLocalNode, err := params.LocalNodeStore.Get(ctx)
-		if err == nil {
-			_, err = k8s.AnnotateNode(
-				params.Logger,
-				params.Clientset,
-				nodeTypes.GetName(),
-				latestLocalNode.Node,
-				params.IPsecAgent.SPI())
-		}
-		if err != nil {
-			params.Logger.Warn("Cannot annotate k8s node with CIDR range", logfields.Error, err)
-		}
-
-		bootstrapStats.k8sInit.End(true)
-	} else if !params.DaemonConfig.AnnotateK8sNode {
-		params.Logger.Debug("Annotate k8s node is disabled.")
-	}
+	params.NodeDiscovery.AnnotateK8sNode(ctx)
 
 	// Trigger refresh and update custom resource in the apiserver with all restored endpoints.
 	// Trigger after nodeDiscovery.StartDiscovery to avoid custom resource update conflict.

@@ -68,7 +68,7 @@ func readInput(t *testing.T, file string) []client.Object {
 	require.NoError(t, err)
 
 	var res []client.Object
-	for o := range strings.SplitSeq(string(inputYaml), "---") {
+	for o := range strings.SplitSeq(string(inputYaml), "\n---\n") {
 		o = strings.TrimSpace(o)
 		if o == "" {
 			continue
@@ -76,8 +76,16 @@ func readInput(t *testing.T, file string) []client.Object {
 		_, kind, err := getResourceKind(o)
 		require.NoError(t, err, "failed to get resource kind from input YAML")
 		switch kind {
+		case "Namespace":
+			obj := &corev1.Namespace{}
+			fromYaml(t, o, obj)
+			res = append(res, obj)
 		case "Service":
 			obj := &corev1.Service{}
+			fromYaml(t, o, obj)
+			res = append(res, obj)
+		case "ConfigMap":
+			obj := &corev1.ConfigMap{}
 			fromYaml(t, o, obj)
 			res = append(res, obj)
 		case "Secret":
@@ -110,6 +118,10 @@ func readInput(t *testing.T, file string) []client.Object {
 			res = append(res, obj)
 		case "ServiceImport":
 			obj := &mcsapiv1alpha1.ServiceImport{}
+			fromYaml(t, o, obj)
+			res = append(res, obj)
+		case "BackendTLSPolicy":
+			obj := &gatewayv1.BackendTLSPolicy{}
 			fromYaml(t, o, obj)
 			res = append(res, obj)
 		}

@@ -1,9 +1,12 @@
 This repository holds helm templates for the following Cilium releases:
 
+* [v1.19.0-rc.0](https://github.com/cilium/cilium/releases/tag/v1.19.0-rc.0) (_[source](https://github.com/cilium/cilium/tree/v1.19.0-rc.0/install/kubernetes/cilium)_)
+* [v1.19.0-pre.4](https://github.com/cilium/cilium/releases/tag/v1.19.0-pre.4) (_[source](https://github.com/cilium/cilium/tree/v1.19.0-pre.4/install/kubernetes/cilium)_)
 * [v1.19.0-pre.3](https://github.com/cilium/cilium/releases/tag/v1.19.0-pre.3) (_[source](https://github.com/cilium/cilium/tree/v1.19.0-pre.3/install/kubernetes/cilium)_)
 * [v1.19.0-pre.2](https://github.com/cilium/cilium/releases/tag/v1.19.0-pre.2) (_[source](https://github.com/cilium/cilium/tree/v1.19.0-pre.2/install/kubernetes/cilium)_)
 * [v1.19.0-pre.1](https://github.com/cilium/cilium/releases/tag/v1.19.0-pre.1) (_[source](https://github.com/cilium/cilium/tree/v1.19.0-pre.1/install/kubernetes/cilium)_)
 * [v1.19.0-pre.0](https://github.com/cilium/cilium/releases/tag/v1.19.0-pre.0) (_[source](https://github.com/cilium/cilium/tree/v1.19.0-pre.0/install/kubernetes/cilium)_)
+* [v1.18.6](https://github.com/cilium/cilium/releases/tag/v1.18.6) (_[source](https://github.com/cilium/cilium/tree/v1.18.6/install/kubernetes/cilium)_)
 * [v1.18.5](https://github.com/cilium/cilium/releases/tag/v1.18.5) (_[source](https://github.com/cilium/cilium/tree/v1.18.5/install/kubernetes/cilium)_)
 * [v1.18.4](https://github.com/cilium/cilium/releases/tag/v1.18.4) (_[source](https://github.com/cilium/cilium/tree/v1.18.4/install/kubernetes/cilium)_)
 * [v1.18.3](https://github.com/cilium/cilium/releases/tag/v1.18.3) (_[source](https://github.com/cilium/cilium/tree/v1.18.3/install/kubernetes/cilium)_)
@@ -16,6 +19,7 @@ This repository holds helm templates for the following Cilium releases:
 * [v1.18.0-pre.2](https://github.com/cilium/cilium/releases/tag/v1.18.0-pre.2) (_[source](https://github.com/cilium/cilium/tree/v1.18.0-pre.2/install/kubernetes/cilium)_)
 * [v1.18.0-pre.1](https://github.com/cilium/cilium/releases/tag/v1.18.0-pre.1) (_[source](https://github.com/cilium/cilium/tree/v1.18.0-pre.1/install/kubernetes/cilium)_)
 * [v1.18.0-pre.0](https://github.com/cilium/cilium/releases/tag/v1.18.0-pre.0) (_[source](https://github.com/cilium/cilium/tree/v1.18.0-pre.0/install/kubernetes/cilium)_)
+* [v1.17.12](https://github.com/cilium/cilium/releases/tag/v1.17.12) (_[source](https://github.com/cilium/cilium/tree/v1.17.12/install/kubernetes/cilium)_)
 * [v1.17.11](https://github.com/cilium/cilium/releases/tag/v1.17.11) (_[source](https://github.com/cilium/cilium/tree/v1.17.11/install/kubernetes/cilium)_)
 * [v1.17.10](https://github.com/cilium/cilium/releases/tag/v1.17.10) (_[source](https://github.com/cilium/cilium/tree/v1.17.10/install/kubernetes/cilium)_)
 * [v1.17.9](https://github.com/cilium/cilium/releases/tag/v1.17.9) (_[source](https://github.com/cilium/cilium/tree/v1.17.9/install/kubernetes/cilium)_)
@@ -35,6 +39,7 @@ This repository holds helm templates for the following Cilium releases:
 * [v1.17.0-pre.2](https://github.com/cilium/cilium/releases/tag/v1.17.0-pre.2) (_[source](https://github.com/cilium/cilium/tree/v1.17.0-pre.2/install/kubernetes/cilium)_)
 * [v1.17.0-pre.1](https://github.com/cilium/cilium/releases/tag/v1.17.0-pre.1) (_[source](https://github.com/cilium/cilium/tree/v1.17.0-pre.1/install/kubernetes/cilium)_)
 * [v1.17.0-pre.0](https://github.com/cilium/cilium/releases/tag/v1.17.0-pre.0) (_[source](https://github.com/cilium/cilium/tree/v1.17.0-pre.0/install/kubernetes/cilium)_)
+* [v1.16.19](https://github.com/cilium/cilium/releases/tag/v1.16.19) (_[source](https://github.com/cilium/cilium/tree/v1.16.19/install/kubernetes/cilium)_)
 * [v1.16.18](https://github.com/cilium/cilium/releases/tag/v1.16.18) (_[source](https://github.com/cilium/cilium/tree/v1.16.18/install/kubernetes/cilium)_)
 * [v1.16.17](https://github.com/cilium/cilium/releases/tag/v1.16.17) (_[source](https://github.com/cilium/cilium/tree/v1.16.17/install/kubernetes/cilium)_)
 * [v1.16.16](https://github.com/cilium/cilium/releases/tag/v1.16.16) (_[source](https://github.com/cilium/cilium/tree/v1.16.16/install/kubernetes/cilium)_)

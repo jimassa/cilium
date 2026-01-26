@@ -24,6 +24,8 @@ type BPFHost struct {
 	EnableNetkit bool `config:"enable_netkit"`
 	// Enable routes when service has 0 endpoints.
 	EnableNoServiceEndpointsRoutable bool `config:"enable_no_service_endpoints_routable"`
+	// Maintain packet and byte counters for every policy entry.
+	EnablePolicyAccounting bool `config:"enable_policy_accounting"`
 	// Masquerade traffic to remote nodes.
 	EnableRemoteNodeMasquerade bool `config:"enable_remote_node_masquerade"`
 	// Ephemeral port range minimun.
@@ -33,6 +35,8 @@ type BPFHost struct {
 	EthHeaderLength uint8 `config:"eth_header_length"`
 	// The host endpoint ID.
 	HostEPID uint16 `config:"host_ep_id"`
+	// Enable hybrid mode routing based on subnet IDs.
+	HybridRoutingEnabled bool `config:"hybrid_routing_enabled"`
 	// Ifindex of the interface the bpf program is attached to.
 	InterfaceIfIndex uint32 `config:"interface_ifindex"`
 	// MAC address of the interface the bpf program is attached to.
@@ -56,8 +60,8 @@ type BPFHost struct {
 }
 
 func NewBPFHost(node Node) *BPFHost {
-	return &BPFHost{false, 0x5dc, false, false, false, false, false, false, 0x0, 0xe,
-		0x0, 0x0, [8]byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
+	return &BPFHost{false, 0x5dc, false, false, false, false, false, false, false,
+		0x0, 0xe, 0x0, false, 0x0, [8]byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
 		0x0, [4]byte{0x0, 0x0, 0x0, 0x0},
 		[16]byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
 		0x0, 0x0, 0x0, 0x0, node}

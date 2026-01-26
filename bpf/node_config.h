@@ -143,7 +143,6 @@
 #define MTU 1500
 #if defined(ENABLE_NODEPORT) || defined(ENABLE_HOST_FIREWALL) || defined(ENABLE_NAT_46X64)
 #define CONNTRACK_ACCOUNTING
-#define POLICY_ACCOUNTING
 
 #endif /* ENABLE_NODEPORT || ENABLE_HOST_FIREWALL */
 
@@ -181,7 +180,7 @@
 # define LB_SELECTION		LB_SELECTION_RANDOM
 #endif
 
-#ifdef ENCRYPTION_STRICT_MODE
+#ifdef ENCRYPTION_STRICT_MODE_EGRESS
 #  ifndef STRICT_IPV4_NET
 #   define STRICT_IPV4_NET	0
 #  endif
@@ -217,12 +216,6 @@ return false;
 # define NAT_46X64_PREFIX_1 0
 # define NAT_46X64_PREFIX_2 0
 # define NAT_46X64_PREFIX_3 0
-#endif
-
-#ifndef __CLUSTERMESH_HELPERS__
-#define __CLUSTERMESH_HELPERS__
-#define IDENTITY_LEN 16
-#define IDENTITY_MAX 65535
 #endif
 
 /*

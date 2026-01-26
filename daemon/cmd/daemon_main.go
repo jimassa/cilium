@@ -24,7 +24,7 @@ import (
 
 	"github.com/cilium/cilium/daemon/cmd/legacy"
 	"github.com/cilium/cilium/daemon/infraendpoints"
-	agentK8s "github.com/cilium/cilium/daemon/k8s"
+	"github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/cgroups"
 	"github.com/cilium/cilium/pkg/common"
@@ -59,7 +59,6 @@ import (
 	"github.com/cilium/cilium/pkg/metrics"
 	monitorAgent "github.com/cilium/cilium/pkg/monitor/agent"
 	monitorAPI "github.com/cilium/cilium/pkg/monitor/api"
-	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/nodediscovery"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/pidfile"
@@ -192,8 +191,9 @@ func InitGlobalFlags(logger *slog.Logger, cmd *cobra.Command, vp *viper.Viper) {
 	option.BindEnv(vp, option.DebugVerbose)
 
 	flags.String(option.DatapathMode, defaults.DatapathMode,
-		fmt.Sprintf("Datapath mode name (%s, %s, %s)",
-			datapathOption.DatapathModeVeth, datapathOption.DatapathModeNetkit, datapathOption.DatapathModeNetkitL2))
+		fmt.Sprintf("Datapath mode name (%s, %s, %s, %s)",
+			datapathOption.DatapathModeAuto, datapathOption.DatapathModeVeth,
+			datapathOption.DatapathModeNetkit, datapathOption.DatapathModeNetkitL2))
 	option.BindEnv(vp, option.DatapathMode)
 
 	flags.Bool(option.EnableEndpointRoutes, defaults.EnableEndpointRoutes, "Use per endpoint routes instead of routing via cilium_host")
@@ -327,13 +327,28 @@ func InitGlobalFlags(logger *slog.Logger, cmd *cobra.Command, vp *viper.Viper) {
 	option.BindEnv(vp, option.L2AnnouncerRetryPeriod)
 
 	flags.Bool(option.EnableEncryptionStrictMode, false, "Enable encryption strict mode")
+	flags.MarkDeprecated(option.EnableEncryptionStrictMode, "Please use --enable-encryption-strict-mode-egress instead. This option will be removed in v1.20")
 	option.BindEnv(vp, option.EnableEncryptionStrictMode)
 
-	flags.String(option.EncryptionStrictModeCIDR, "", "In strict-mode encryption, all unencrypted traffic coming from this CIDR and going to this same CIDR will be dropped")
+	flags.String(option.EncryptionStrictModeCIDR, "", "In strict-mode encryption, all unencrypted traffic coming from this CIDR and going to this same CIDR will be dropped.")
+	flags.MarkDeprecated(option.EncryptionStrictModeCIDR, "Please use --encryption-strict-egress-cidr instead. This option will be removed in v1.20")
 	option.BindEnv(vp, option.EncryptionStrictModeCIDR)
 
 	flags.Bool(option.EncryptionStrictModeAllowRemoteNodeIdentities, false, "Allows unencrypted traffic from pods to remote node identities within the strict mode CIDR. This is required when tunneling is used or direct routing is used and the node CIDR and pod CIDR overlap.")
+	flags.MarkDeprecated(option.EncryptionStrictModeAllowRemoteNodeIdentities, "Please use --encryption-strict-egress-allow-remote-node-identities instead. This option will be removed in v1.20")
 	option.BindEnv(vp, option.EncryptionStrictModeAllowRemoteNodeIdentities)
+
+	flags.Bool(option.EnableEncryptionStrictModeEgress, false, "Enable strict mode encryption enforcement for egress traffic")
+	option.BindEnv(vp, option.EnableEncryptionStrictModeEgress)
+
+	flags.String(option.EncryptionStrictEgressCIDR, "", "In strict-mode-egress encryption, all unencrypted traffic coming from this CIDR and going to this same CIDR will be dropped.")
+	option.BindEnv(vp, option.EncryptionStrictEgressCIDR)
+
+	flags.Bool(option.EncryptionStrictEgressAllowRemoteNodeIdentities, false, "Allows unencrypted traffic from pods to remote node identities within the strict mode CIDR. This is required when tunneling is used or direct routing is used and the node CIDR and pod CIDR overlap.")
+	option.BindEnv(vp, option.EncryptionStrictEgressAllowRemoteNodeIdentities)
+
+	flags.Bool(option.EnableEncryptionStrictModeIngress, false, "Enable strict mode encryption enforcement for ingress traffic")
+	option.BindEnv(vp, option.EnableEncryptionStrictModeIngress)
 
 	flags.Var(option.NewMapOptions(&option.Config.FixedIdentityMapping, option.Config.FixedIdentityMappingValidator),
 		option.FixedIdentityMapping, "Key-value for the fixed identity mapping which allows to use reserved label for fixed identities, e.g. 128=kv-store,129=kube-dns")
@@ -672,7 +687,7 @@ func InitGlobalFlags(logger *slog.Logger, cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.PolicyAuditModeArg, false, "Enable policy audit (non-drop) mode")
 	option.BindEnv(vp, option.PolicyAuditModeArg)
 
-	flags.Bool(option.PolicyAccountingArg, true, "Enable policy accounting")
+	flags.Bool(option.PolicyAccountingArg, defaults.PolicyAccounting, "Maintain packet and byte counters for every policy entry")
 	option.BindEnv(vp, option.PolicyAccountingArg)
 
 	flags.Bool(option.EnableIPv4FragmentsTrackingName, defaults.EnableIPv4FragmentsTracking, "Enable IPv4 fragments tracking for L4-based lookups")
@@ -980,8 +995,8 @@ func initEnv(logger *slog.Logger, vp *viper.Viper) {
 		)
 	}
 
-	option.Config.AllowLocalhost = strings.ToLower(option.Config.AllowLocalhost)
-	switch option.Config.AllowLocalhost {
+	option.Config.UnsafeDaemonConfigOption.AllowLocalhost = strings.ToLower(option.Config.UnsafeDaemonConfigOption.AllowLocalhost)
+	switch option.Config.UnsafeDaemonConfigOption.AllowLocalhost {
 	case option.AllowLocalhostAlways, option.AllowLocalhostAuto, option.AllowLocalhostPolicy:
 	default:
 		logging.Fatal(scopedLog, fmt.Sprintf("Invalid setting for --allow-localhost, must be { %s, %s, %s }",
@@ -1022,7 +1037,6 @@ func initEnv(logger *slog.Logger, vp *viper.Viper) {
 	option.Config.Opts.SetBool(option.PolicyTracing, option.Config.EnableTracing)
 	option.Config.Opts.SetBool(option.ConntrackAccounting, option.Config.BPFConntrackAccounting)
 	option.Config.Opts.SetBool(option.PolicyAuditMode, option.Config.PolicyAuditMode)
-	option.Config.Opts.SetBool(option.PolicyAccounting, option.Config.PolicyAccounting)
 	option.Config.Opts.SetBool(option.SourceIPVerification, option.Config.EnableSourceIPVerification)
 
 	monitorAggregationLevel, err := option.ParseMonitorAggregationLevel(option.Config.MonitorAggregation)
@@ -1045,21 +1059,6 @@ func initEnv(logger *slog.Logger, vp *viper.Viper) {
 	}
 	if err := labelsfilter.ParseLabelPrefixCfg(logger, option.Config.Labels, option.Config.NodeLabels, option.Config.LabelPrefixFile); err != nil {
 		logging.Fatal(logger, "Unable to parse Label prefix configuration", logfields.Error, err)
-	}
-
-	switch option.Config.DatapathMode {
-	case datapathOption.DatapathModeVeth:
-	case datapathOption.DatapathModeNetkit, datapathOption.DatapathModeNetkitL2:
-		// For netkit we enable also tcx for all non-netkit devices.
-		// The underlying kernel does support it given tcx got merged
-		// before netkit and supporting legacy tc in this context does
-		// not make any sense whatsoever.
-		option.Config.EnableTCX = true
-		if err := probes.HaveNetkit(); err != nil {
-			logging.Fatal(logger, "netkit devices need kernel 6.7.0 or newer and CONFIG_NETKIT")
-		}
-	default:
-		logging.Fatal(logger, "Invalid datapath mode", logfields.DatapathMode, option.Config.DatapathMode)
 	}
 
 	if option.Config.EnableL7Proxy && !option.Config.InstallIptRules {
@@ -1217,8 +1216,8 @@ type daemonParams struct {
 	Clientset           k8sClient.Clientset
 	KVStoreClient       kvstore.Client
 	WGAgent             wgTypes.WireguardAgent
-	LocalNodeStore      *node.LocalNodeStore
-	Resources           agentK8s.Resources
+	LocalNodeRes        k8s.LocalNodeResource
+	LocalCiliumNodeRes  k8s.LocalCiliumNodeResource
 	K8sWatcher          *watchers.K8sWatcher
 	NodeHandler         datapath.NodeHandler
 	EndpointManager     endpointmanager.EndpointManager

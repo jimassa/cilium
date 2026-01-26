@@ -697,6 +697,23 @@ const (
 	// or direct routing is used and the node CIDR and pod CIDR overlap.
 	EncryptionStrictModeAllowRemoteNodeIdentities = "encryption-strict-mode-allow-remote-node-identities"
 
+	// EnableEncryptionStrictModeEgress enables strict mode encryption enforcement for egress traffic.
+	// When enabled, all unencrypted pod-to-pod egress traffic will be dropped.
+	EnableEncryptionStrictModeEgress = "enable-encryption-strict-mode-egress"
+
+	// EncryptionStrictEgressCIDR is the CIDR in which the strict egress encryption mode should be enforced.
+	EncryptionStrictEgressCIDR = "encryption-strict-egress-cidr"
+
+	// EncryptionStrictEgressAllowRemoteNodeIdentities allows dynamic lookup of remote node identities.
+	// This is required when tunneling is used
+	// or direct routing is used and the node CIDR and pod CIDR overlap.
+	EncryptionStrictEgressAllowRemoteNodeIdentities = "encryption-strict-egress-allow-remote-node-identities"
+
+	// EnableEncryptionStrictModeIngress enables strict mode encryption enforcement for ingress traffic.
+	// When enabled, all unencrypted pod-to-pod ingress traffic will be dropped.
+	// This option is only applicable when encryption and tunneling is enabled.
+	EnableEncryptionStrictModeIngress = "enable-encryption-strict-mode-ingress"
+
 	// KVstoreLeaseTTL is the time-to-live for lease in kvstore.
 	KVstoreLeaseTTL = "kvstore-lease-ttl"
 
@@ -1134,8 +1151,37 @@ func (c *HiveConfig) Populate(vp *viper.Viper) {
 	c.LogThreshold = vp.GetDuration(HiveLogThreshold)
 }
 
+// UnsafeDaemonConfig contains configuration that may be changed during runtime.
+// It is safe to use it ONLY after waiting on DaemonConfig promise.
+type UnsafeDaemonConfig struct {
+	EnableSocketLBTracing bool
+	EnableSocketLBPeer    bool
+	// EnableHealthDatapath enables IPIP health probes data path
+	EnableHealthDatapath bool
+	// EnableSocketLBPodConnectionTermination enables the termination of connections from pods
+	// to deleted service backends when socket-LB is enabled
+	EnableSocketLBPodConnectionTermination bool
+	// EnableHostLegacyRouting enables the old routing path via stack.
+	EnableHostLegacyRouting bool
+	LoadBalancerRSSv4       net.IPNet
+	LoadBalancerRSSv6       net.IPNet
+
+	// EnableIPIPDevices enables the creation of IPIP devices for IPv4 and IPv6
+	EnableIPIPDevices bool
+
+	BPFSocketLBHostnsOnly bool
+
+	EncryptInterface []string // Set of network facing interface to encrypt over
+
+	// AllowLocalhost defines when to allows the local stack to local endpoints
+	// values: { auto | always | policy }
+	AllowLocalhost string
+}
+
 // DaemonConfig is the configuration used by Daemon.
 type DaemonConfig struct {
+	UnsafeDaemonConfigOption UnsafeDaemonConfig
+
 	// Private sum of the config written to file. Used to check that the config is not changed
 	// after.
 	shaSum [32]byte
@@ -1159,10 +1205,6 @@ type DaemonConfig struct {
 	RestoreState bool
 
 	KeepConfig bool // Keep configuration of existing endpoints when starting up.
-
-	// AllowLocalhost defines when to allows the local stack to local endpoints
-	// values: { auto | always | policy }
-	AllowLocalhost string
 
 	// StateDir is the directory where runtime state of endpoints is stored
 	StateDir string
@@ -1329,16 +1371,22 @@ type DaemonConfig struct {
 	// BootIDFile is the file containing the boot ID of the node
 	BootIDFile string
 
-	// EnableEncryptionStrictMode enables strict mode for encryption
-	EnableEncryptionStrictMode bool
+	// EnableEncryptionStrictModeEgress enables strict mode for egress traffic.
+	// When enabled, all unencrypted pod-to-pod egress traffic will be dropped.
+	EnableEncryptionStrictModeEgress bool
 
-	// EncryptionStrictModeCIDR is the CIDR to use for strict mode
-	EncryptionStrictModeCIDR netip.Prefix
+	// EncryptionStrictEgressCIDR is the CIDR to use for strict mode egress
+	EncryptionStrictEgressCIDR netip.Prefix
 
-	// EncryptionStrictModeAllowRemoteNodeIdentities allows dynamic lookup of node identities.
+	// EncryptionStrictEgressAllowRemoteNodeIdentities allows dynamic lookup of node identities.
 	// This is required when tunneling is used
 	// or direct routing is used and the node CIDR and pod CIDR overlap.
-	EncryptionStrictModeAllowRemoteNodeIdentities bool
+	EncryptionStrictEgressAllowRemoteNodeIdentities bool
+
+	// EnableEncryptionStrictModeIngress enables strict mode encryption for ingress traffic.
+	// When enabled, all unencrypted pod-to-pod ingress traffic will be dropped.
+	// This option is only applicable when wireguard encryption and tunneling is enabled.
+	EnableEncryptionStrictModeIngress bool
 
 	// EnableL2Announcements enables L2 announcement of service IPs
 	EnableL2Announcements bool
@@ -1353,15 +1401,12 @@ type DaemonConfig struct {
 	// CLI options
 
 	BPFRoot                       string
-	BPFSocketLBHostnsOnly         bool
 	CGroupRoot                    string
 	BPFCompileDebug               string
 	ConfigFile                    string
 	ConfigDir                     string
 	Debug                         bool
 	DebugVerbose                  []string
-	EnableSocketLBTracing         bool
-	EnableSocketLBPeer            bool
 	EnablePolicy                  string
 	EnableTracing                 bool
 	EnableIPIPTermination         bool
@@ -1528,15 +1573,6 @@ type DaemonConfig struct {
 	// Specifies whether to annotate the kubernetes nodes or not
 	AnnotateK8sNode bool
 
-	// EnableHealthDatapath enables IPIP health probes data path
-	EnableHealthDatapath bool
-
-	// EnableIPIPDevices enables the creation of IPIP devices for IPv4 and IPv6
-	EnableIPIPDevices bool
-
-	// EnableHostLegacyRouting enables the old routing path via stack.
-	EnableHostLegacyRouting bool
-
 	// NodePortNat46X64 indicates whether NAT46 / NAT64 can be used.
 	NodePortNat46X64 bool
 
@@ -1545,11 +1581,9 @@ type DaemonConfig struct {
 
 	// LoadBalancerRSSv4CIDR defines the outer source IPv4 prefix for DSR/IPIP
 	LoadBalancerRSSv4CIDR string
-	LoadBalancerRSSv4     net.IPNet
 
 	// LoadBalancerRSSv4CIDR defines the outer source IPv6 prefix for DSR/IPIP
 	LoadBalancerRSSv6CIDR string
-	LoadBalancerRSSv6     net.IPNet
 
 	// EnablePMTUDiscovery indicates whether to send ICMP fragmentation-needed
 	// replies to the client (when needed).
@@ -1794,10 +1828,6 @@ type DaemonConfig struct {
 	// EnableNodeSelectorLabels)
 	NodeLabels []string
 
-	// EnableSocketLBPodConnectionTermination enables the termination of connections from pods
-	// to deleted service backends when socket-LB is enabled
-	EnableSocketLBPodConnectionTermination bool
-
 	// EnableNonDefaultDenyPolicies allows policies to define whether they are operating in default-deny mode
 	EnableNonDefaultDenyPolicies bool
 
@@ -1850,6 +1880,7 @@ var (
 		AllowICMPFragNeeded:             defaults.AllowICMPFragNeeded,
 		AllocatorListTimeout:            defaults.AllocatorListTimeout,
 		EnableICMPRules:                 defaults.EnableICMPRules,
+		DatapathMode:                    defaults.DatapathMode,
 
 		EnableVTEP:                           defaults.EnableVTEP,
 		EnableBGPControlPlane:                defaults.EnableBGPControlPlane,
@@ -1875,6 +1906,8 @@ var (
 		IPTracingOptionType: defaults.IPTracingOptionType,
 
 		EnableCiliumNodeCRD: defaults.EnableCiliumNodeCRD,
+
+		PolicyAccounting: defaults.PolicyAccounting,
 	}
 )
 
@@ -1911,7 +1944,7 @@ func (c *DaemonConfig) GetGlobalsDir() string {
 // AlwaysAllowLocalhost returns true if the daemon has the option set that
 // localhost can always reach local endpoints
 func (c *DaemonConfig) AlwaysAllowLocalhost() bool {
-	switch c.AllowLocalhost {
+	switch c.UnsafeDaemonConfigOption.AllowLocalhost {
 	case AllowLocalhostAlways:
 		return true
 	case AllowLocalhostAuto, AllowLocalhostPolicy:
@@ -1935,35 +1968,6 @@ func (c *DaemonConfig) TunnelingEnabled() bool {
 func (c *DaemonConfig) AreDevicesRequired(kprCfg kpr.KPRConfig, wireguardEnabled, ipsecEnabled bool) bool {
 	return kprCfg.KubeProxyReplacement || c.EnableBPFMasquerade || c.EnableHostFirewall || wireguardEnabled ||
 		c.EnableL2Announcements || c.ForceDeviceRequired || ipsecEnabled
-}
-
-// NeedIngressOnWireGuardDevice returns true if the agent needs to attach
-// cil_from_wireguard on the Ingress of Cilium's WireGuard device
-func (c *DaemonConfig) NeedIngressOnWireGuardDevice(kprCfg kpr.KPRConfig, wireguardEnabled bool) bool {
-	if !wireguardEnabled {
-		return false
-	}
-
-	// In native routing mode we want to deliver packets to local endpoints
-	// straight from BPF, without passing through the stack.
-	// This matches overlay mode (where bpf_overlay would handle the delivery)
-	// and native routing mode without encryption (where bpf_host at the native
-	// device would handle the delivery).
-	if !c.TunnelingEnabled() {
-		return true
-	}
-
-	// When WG & encrypt-node are on, a NodePort BPF to-be forwarded request
-	// to a remote node running a selected service endpoint must be encrypted.
-	// To make the NodePort's rev-{S,D}NAT translations to happen for a reply
-	// from the remote node, we need to attach bpf_host to the Cilium's WG
-	// netdev (otherwise, the WG netdev after decrypting the reply will pass
-	// it to the stack which drops the packet).
-	if kprCfg.KubeProxyReplacement && c.EncryptNode {
-		return true
-	}
-
-	return false
 }
 
 // NeedEgressOnWireGuardDevice returns true if the agent needs to attach
@@ -2111,7 +2115,7 @@ func (c *DaemonConfig) validatePolicyCIDRMatchMode() error {
 func (c *DaemonConfig) DirectRoutingDeviceRequired(kprCfg kpr.KPRConfig, wireguardEnabled bool) bool {
 	// BPF NodePort and BPF Host Routing are using the direct routing device now.
 	// When tunneling is enabled, node-to-node redirection will be done by tunneling.
-	BPFHostRoutingEnabled := !c.EnableHostLegacyRouting
+	BPFHostRoutingEnabled := !c.UnsafeDaemonConfigOption.EnableHostLegacyRouting
 
 	// XDP needs IPV4_DIRECT_ROUTING when building tunnel headers:
 	if kprCfg.KubeProxyReplacement && c.NodePortAcceleration != NodePortAccelerationDisabled {
@@ -2371,7 +2375,7 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 
 	c.ClusterHealthPort = vp.GetInt(ClusterHealthPort)
 	c.AllowICMPFragNeeded = vp.GetBool(AllowICMPFragNeeded)
-	c.AllowLocalhost = vp.GetString(AllowLocalhost)
+	c.UnsafeDaemonConfigOption.AllowLocalhost = vp.GetString(AllowLocalhost)
 	c.AnnotateK8sNode = vp.GetBool(AnnotateK8sNode)
 	c.AutoCreateCiliumNodeResource = vp.GetBool(AutoCreateCiliumNodeResource)
 	c.BPFRoot = vp.GetString(BPFRoot)
@@ -2396,9 +2400,9 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.EnableTCX = vp.GetBool(EnableTCX)
 	c.DisableCiliumEndpointCRD = vp.GetBool(DisableCiliumEndpointCRDName)
 	c.MasqueradeInterfaces = vp.GetStringSlice(MasqueradeInterfaces)
-	c.BPFSocketLBHostnsOnly = vp.GetBool(BPFSocketLBHostnsOnly)
-	c.EnableSocketLBTracing = vp.GetBool(EnableSocketLBTracing)
-	c.EnableSocketLBPodConnectionTermination = vp.GetBool(EnableSocketLBPodConnectionTermination)
+	c.UnsafeDaemonConfigOption.BPFSocketLBHostnsOnly = vp.GetBool(BPFSocketLBHostnsOnly)
+	c.UnsafeDaemonConfigOption.EnableSocketLBTracing = vp.GetBool(EnableSocketLBTracing)
+	c.UnsafeDaemonConfigOption.EnableSocketLBPodConnectionTermination = vp.GetBool(EnableSocketLBPodConnectionTermination)
 	c.EnableBPFTProxy = vp.GetBool(EnableBPFTProxy)
 	c.EnableAutoDirectRouting = vp.GetBool(EnableAutoDirectRoutingName)
 	c.DirectRoutingSkipUnreachable = vp.GetBool(DirectRoutingSkipUnreachableName)
@@ -2411,9 +2415,9 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.EnableL7Proxy = vp.GetBool(EnableL7Proxy)
 	c.EnableTracing = vp.GetBool(EnableTracing)
 	c.EnableIPIPTermination = vp.GetBool(EnableIPIPTermination)
-	c.EnableIPIPDevices = c.EnableIPIPTermination
+	c.UnsafeDaemonConfigOption.EnableIPIPDevices = c.EnableIPIPTermination
 	c.EnableUnreachableRoutes = vp.GetBool(EnableUnreachableRoutes)
-	c.EnableHostLegacyRouting = vp.GetBool(EnableHostLegacyRouting)
+	c.UnsafeDaemonConfigOption.EnableHostLegacyRouting = vp.GetBool(EnableHostLegacyRouting)
 	c.NodePortBindProtection = vp.GetBool(NodePortBindProtection)
 	c.NodePortNat46X64 = vp.GetBool(LoadBalancerNat46X64)
 	c.EnableAutoProtectNodePortRange = vp.GetBool(EnableAutoProtectNodePortRange)
@@ -2421,7 +2425,7 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.CgroupPathMKE = vp.GetString(CgroupPathMKE)
 	c.EnableHostFirewall = vp.GetBool(EnableHostFirewall)
 	c.EnableLocalRedirectPolicy = vp.GetBool(EnableLocalRedirectPolicy)
-	c.EncryptInterface = vp.GetStringSlice(EncryptInterface)
+	c.UnsafeDaemonConfigOption.EncryptInterface = vp.GetStringSlice(EncryptInterface)
 	c.EncryptNode = vp.GetBool(EncryptNode)
 	c.IdentityChangeGracePeriod = vp.GetDuration(IdentityChangeGracePeriod)
 	c.CiliumIdentityMaxJitter = vp.GetDuration(CiliumIdentityMaxJitter)
@@ -2553,6 +2557,7 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 		}
 	}
 
+	// This code block is for deprecated options and will be removed in Cilium 1.20.
 	encryptionStrictModeEnabled := vp.GetBool(EnableEncryptionStrictMode)
 	if encryptionStrictModeEnabled {
 		if c.EnableIPv6 {
@@ -2560,18 +2565,40 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 		}
 
 		strictCIDR := vp.GetString(EncryptionStrictModeCIDR)
-		c.EncryptionStrictModeCIDR, err = netip.ParsePrefix(strictCIDR)
+		c.EncryptionStrictEgressCIDR, err = netip.ParsePrefix(strictCIDR)
 		if err != nil {
 			logging.Fatal(logger, fmt.Sprintf("Cannot parse CIDR %s from --%s option", strictCIDR, EncryptionStrictModeCIDR), logfields.Error, err)
 		}
 
-		if !c.EncryptionStrictModeCIDR.Addr().Is4() {
+		if !c.EncryptionStrictEgressCIDR.Addr().Is4() {
 			logging.Fatal(logger, fmt.Sprintf("%s must be an IPv4 CIDR", EncryptionStrictModeCIDR))
 		}
 
-		c.EncryptionStrictModeAllowRemoteNodeIdentities = vp.GetBool(EncryptionStrictModeAllowRemoteNodeIdentities)
-		c.EnableEncryptionStrictMode = encryptionStrictModeEnabled
+		c.EncryptionStrictEgressAllowRemoteNodeIdentities = vp.GetBool(EncryptionStrictModeAllowRemoteNodeIdentities)
+		c.EnableEncryptionStrictModeEgress = encryptionStrictModeEnabled
 	}
+
+	encryptionStrictModeEgressEnabled := vp.GetBool(EnableEncryptionStrictModeEgress)
+	if encryptionStrictModeEgressEnabled {
+		if c.EnableIPv6 {
+			logger.Info("Encryption strict mode only supports IPv4. IPv6 traffic is not protected and can be leaked.")
+		}
+
+		strictCIDR := vp.GetString(EncryptionStrictEgressCIDR)
+		c.EncryptionStrictEgressCIDR, err = netip.ParsePrefix(strictCIDR)
+		if err != nil {
+			logging.Fatal(logger, fmt.Sprintf("Cannot parse CIDR %s from --%s option", strictCIDR, EncryptionStrictEgressCIDR), logfields.Error, err)
+		}
+
+		if !c.EncryptionStrictEgressCIDR.Addr().Is4() {
+			logging.Fatal(logger, fmt.Sprintf("%s must be an IPv4 CIDR", EncryptionStrictEgressCIDR))
+		}
+
+		c.EncryptionStrictEgressAllowRemoteNodeIdentities = vp.GetBool(EncryptionStrictEgressAllowRemoteNodeIdentities)
+		c.EnableEncryptionStrictModeEgress = encryptionStrictModeEgressEnabled
+	}
+
+	c.EnableEncryptionStrictModeIngress = vp.GetBool(EnableEncryptionStrictModeIngress)
 
 	ipv4NativeRoutingCIDR := vp.GetString(IPv4NativeRoutingCIDR)
 
@@ -3261,7 +3288,7 @@ func (c *DaemonConfig) checksum() [32]byte {
 	sumConfig := *c
 	// Ignore variable parts
 	sumConfig.Opts = nil
-	sumConfig.EncryptInterface = nil
+	sumConfig.UnsafeDaemonConfigOption.EncryptInterface = nil
 	cBytes, err := json.Marshal(&sumConfig)
 	if err != nil {
 		return [32]byte{}

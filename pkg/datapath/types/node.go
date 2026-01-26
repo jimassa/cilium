@@ -168,6 +168,14 @@ type LocalNodeConfiguration struct {
 	// allocation CIDR IPs into Cilium endpoints.
 	EnableLocalNodeRoute bool
 
+	// DatapathIsLayer2 holds the configuration for whether the underlying
+	// connector to Pods on this node operate at Layer 2.
+	DatapathIsLayer2 bool
+
+	// DatapathIsNetkit holds the configuration for whether the underlying
+	// connector to pods on this node is Netkit or not.
+	DatapathIsNetkit bool
+
 	// EnableWireguard is used to check if we need to attach to the native
 	// device and to cilium_wg0.
 	EnableWireguard bool
@@ -183,6 +191,10 @@ type LocalNodeConfiguration struct {
 
 	// EncryptNode enables encrypting NodeIP traffic
 	EncryptNode bool
+
+	// EnablePolicyAccounting enables maintaining packet and byte counters for every
+	// policy entry
+	EnablePolicyAccounting bool
 
 	// IPv4PodSubnets is a list of IPv4 subnets that pod IPs are assigned from
 	// these are then used when encryption is enabled to configure the node

@@ -60,6 +60,7 @@ func newLocalNodeConfig(
 	mtuTbl statedb.Table[mtu.RouteMTU],
 	wgAgent wgTypes.WireguardAgent,
 	ipsecCfg datapath.IPsecConfig,
+	connectorConfig datapath.ConnectorConfig,
 ) (datapath.LocalNodeConfiguration, <-chan struct{}, error) {
 	auxPrefixes := []*cidr.CIDR{}
 
@@ -139,6 +140,7 @@ func newLocalNodeConfig(
 		DirectRoutingSkipUnreachable: config.DirectRoutingSkipUnreachable,
 		EnableLocalNodeRoute:         config.EnableLocalNodeRoute && config.IPAM != ipamOption.IPAMENI && config.IPAM != ipamOption.IPAMAzure && config.IPAM != ipamOption.IPAMAlibabaCloud,
 		EnableWireguard:              wgAgent.Enabled(),
+		EnablePolicyAccounting:       config.PolicyAccounting,
 		WireguardIfIndex:             wgIndex,
 		EnableIPSec:                  ipsecCfg.Enabled(),
 		EncryptNode:                  config.EncryptNode,
@@ -149,6 +151,8 @@ func newLocalNodeConfig(
 		KPRConfig:                    kprCfg,
 		SvcRouteConfig:               svcCfg,
 		MaglevConfig:                 maglevConfig,
+		DatapathIsLayer2:             connectorConfig.GetOperationalMode().IsLayer2(),
+		DatapathIsNetkit:             connectorConfig.GetOperationalMode().IsNetkit(),
 	}, common.MergeChannels(watchChans...), nil
 }
 

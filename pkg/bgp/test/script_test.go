@@ -33,10 +33,12 @@ import (
 	envoyCfg "github.com/cilium/cilium/pkg/envoy/config"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/kpr"
+	"github.com/cilium/cilium/pkg/lbipamconfig"
 	"github.com/cilium/cilium/pkg/loadbalancer"
 	lbcell "github.com/cilium/cilium/pkg/loadbalancer/cell"
 	"github.com/cilium/cilium/pkg/maglev"
 	"github.com/cilium/cilium/pkg/node"
+	"github.com/cilium/cilium/pkg/nodeipamconfig"
 	"github.com/cilium/cilium/pkg/source"
 	"github.com/cilium/cilium/pkg/svcrouteconfig"
 
@@ -58,11 +60,11 @@ const (
 	testLinkName         = "cilium-bgp-test"
 
 	// test arguments
-	testPeeringIPsFlag         = "test-peering-ips"
-	bgpNoEndpointsRoutableFlag = "bgp-no-endpoints-routable"
-	ipamFlag                   = "ipam"
-	probeTCPMD5Flag            = "probe-tcp-md5"
-	kubeProxyReplacementFlag   = "kube-proxy-replacement"
+	testPeeringIPsFlag            = "test-peering-ips"
+	enableNoEndpointsRoutableFlag = "enable-no-service-endpoints-routable"
+	ipamFlag                      = "ipam"
+	probeTCPMD5Flag               = "probe-tcp-md5"
+	kubeProxyReplacementFlag      = "kube-proxy-replacement"
 )
 
 func TestPrivilegedScript(t *testing.T) {
@@ -91,8 +93,8 @@ func TestPrivilegedScript(t *testing.T) {
 		peeringIPs := flags.StringSlice(testPeeringIPsFlag, nil, "List of IPs used for peering in the test")
 		ipam := flags.String(ipamFlag, ipamOption.IPAMKubernetes, "IPAM used by the test")
 		probeTCPMD5 := flags.Bool(probeTCPMD5Flag, false, "Probe if TCP_MD5SIG socket option is available")
-		noEndpointsRoutable := flags.Bool(bgpNoEndpointsRoutableFlag, true, "")
 		kubeProxyReplacement := flags.Bool(kubeProxyReplacementFlag, true, "")
+		noEndpointsRoutable := flags.Bool(enableNoEndpointsRoutableFlag, true, "")
 		require.NoError(t, flags.Parse(args), "Error parsing test flags")
 
 		if *probeTCPMD5 {
@@ -130,6 +132,8 @@ func TestPrivilegedScript(t *testing.T) {
 			// LB cell to populate LB tables from k8s services / endpoints
 			lbcell.Cell,
 			maglev.Cell,
+			lbipamconfig.Cell,
+			nodeipamconfig.Cell,
 			cell.Provide(source.NewSources),
 			cell.Config(loadbalancer.TestConfig{}),
 			cell.Provide(
